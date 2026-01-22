@@ -50,26 +50,35 @@ class ProcessingThread(QThread):
     
     def run(self):
         """Run the processing in a separate thread."""
+        import sys
         try:
             # Create processor in the worker thread, not the main thread
             print("创建 NLP 处理器实例...")
+            sys.stdout.flush()
+            
             self.processor = NLPProcessor()
             
             def progress_callback(current, total):
                 self.progress_updated.emit(current, total)
             
             print(f"开始处理文件: {self.input_path}")
+            sys.stdout.flush()
+            
             stats = self.processor.process_file(
                 self.input_path,
                 self.output_path,
                 progress_callback=progress_callback
             )
+            
             print("处理完成，发送结果...")
+            sys.stdout.flush()
+            
             self.processing_complete.emit(stats)
         except Exception as e:
             import traceback
             error_detail = f"{type(e).__name__}: {str(e)}\n\n详细错误信息:\n{traceback.format_exc()}"
             print(f"处理线程错误: {error_detail}")
+            sys.stdout.flush()
             self.processing_error.emit(error_detail)
 
 

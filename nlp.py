@@ -125,40 +125,116 @@ class DataCleaner:
 # 2. 情感分析 (GPU)
 # ==========================================
 class SentimentEngine:
-    def __init__(self):
+    def __init__(self, force_cpu=False):
         print("❤️ 正在初始化情感分析模型...")
         model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+        
+        # Determine device to use
+        target_device = torch.device("cpu") if force_cpu else GPU_DEVICE
+        
         try:
             print(f"  📥 下载/加载 tokenizer...")
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            print(f"  📥 下载/加载模型 (首次运行可能需要几分钟)...")
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                model_name, use_safetensors=True
-            )
-            print(f"  🎯 将模型移至 {GPU_DEVICE}...")
-            self.model = self.model.to(GPU_DEVICE)
+            import sys
+            sys.stdout.flush()  # Force flush to ensure message is printed
+            
+            # Add timeout and retry logic
+            import time
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        local_files_only=False,  # Allow downloading
+                        resume_download=True      # Resume if interrupted
+                    )
+                    break
+                except Exception as retry_error:
+                    if attempt < max_retries - 1:
+                        print(f"  ⚠️ Tokenizer 加载失败 (尝试 {attempt + 1}/{max_retries}): {retry_error}")
+                        print(f"  🔄 等待 2 秒后重试...")
+                        sys.stdout.flush()
+                        time.sleep(2)
+                    else:
+                        raise
+            
+            print(f"  ✅ Tokenizer 加载完成")
+            sys.stdout.flush()
+            
+            print(f"  📥 下载/加载模型 (首次运行可能需要几分钟，~500MB)...")
+            print(f"  ⏳ 请耐心等待，不要关闭窗口...")
+            sys.stdout.flush()
+            
+            # Load model with retry logic
+            for attempt in range(max_retries):
+                try:
+                    self.model = AutoModelForSequenceClassification.from_pretrained(
+                        model_name, 
+                        use_safetensors=True,
+                        local_files_only=False,
+                        resume_download=True
+                    )
+                    break
+                except Exception as retry_error:
+                    if attempt < max_retries - 1:
+                        print(f"  ⚠️ 模型加载失败 (尝试 {attempt + 1}/{max_retries}): {retry_error}")
+                        print(f"  🔄 等待 3 秒后重试...")
+                        sys.stdout.flush()
+                        time.sleep(3)
+                    else:
+                        raise
+            
+            print(f"  ✅ 模型下载完成")
+            sys.stdout.flush()
+            
+            print(f"  🎯 将模型移至 {target_device}...")
+            sys.stdout.flush()
+            
+            try:
+                self.model = self.model.to(target_device)
+                self.device = target_device
+                print(f"  ✅ 模型成功加载到 {target_device}")
+            except Exception as gpu_error:
+                print(f"  ⚠️ GPU 加载失败: {gpu_error}")
+                print(f"  🔄 回退到 CPU 模式...")
+                sys.stdout.flush()
+                self.model = self.model.to(torch.device("cpu"))
+                self.device = torch.device("cpu")
+                print(f"  ✅ 模型已加载到 CPU")
+            
             self.model.eval()
-            print(f"  ✅ 模型加载完成！")
+            sys.stdout.flush()
+            print(f"  ✅ 模型初始化完成！使用设备: {self.device}")
+            sys.stdout.flush()
+            
         except Exception as e:
+            import traceback
             error_msg = f"模型加载失败: {type(e).__name__}: {str(e)}"
             print(f"❌ {error_msg}")
+            print(f"详细错误:\n{traceback.format_exc()}")
+            sys.stdout.flush()
+            
             # Provide more helpful error message
             if "out of memory" in str(e).lower() or "oom" in str(e).lower():
-                error_msg += "\n建议：尝试关闭其他占用GPU的程序，或使用CPU模式"
-            elif "connection" in str(e).lower() or "network" in str(e).lower():
-                error_msg += "\n建议：检查网络连接，模型需要从 huggingface.co 下载"
+                error_msg += "\n\n建议：尝试关闭其他占用GPU的程序，或设置 force_cpu=True 使用CPU模式"
+            elif "connection" in str(e).lower() or "network" in str(e).lower() or "timeout" in str(e).lower():
+                error_msg += "\n\n建议：检查网络连接，模型需要从 huggingface.co 下载"
+            elif "torch" in str(e).lower() and "directml" in str(e).lower():
+                error_msg += "\n\n建议：AMD GPU 可能存在兼容性问题，尝试使用 CPU 模式"
+            elif "http" in str(e).lower() or "ssl" in str(e).lower():
+                error_msg += "\n\n建议：网络连接问题，请检查防火墙或代理设置"
+            
             raise RuntimeError(error_msg) from e
 
     def analyze(self, texts, batch_size=32, progress_callback=None):
         results = []
-        print(f"❤️ 正在 GPU 上计算情感分数 (Batch: {batch_size})...")
+        print(f"❤️ 正在 {self.device} 上计算情感分数 (Batch: {batch_size})...")
         total_batches = (len(texts) + batch_size - 1) // batch_size
         
         for batch_idx, i in enumerate(range(0, len(texts), batch_size)):
             batch_texts = texts[i : i + batch_size]
             inputs = self.tokenizer(
                 batch_texts, return_tensors="pt", padding=True, truncation=True, max_length=128
-            ).to(GPU_DEVICE)
+            ).to(self.device)
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 scores = torch.nn.functional.softmax(outputs.logits, dim=1)

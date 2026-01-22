@@ -5,12 +5,33 @@ Provides a user-friendly interface for processing JSON files with user comments.
 
 import sys
 import os
+from io import StringIO
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QProgressBar, QFileDialog, QMessageBox, QTextEdit
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt5.QtGui import QFont
+
+
+# Console output redirector
+class ConsoleRedirector(QObject):
+    """Redirects console output to Qt signal."""
+    output_signal = pyqtSignal(str)
+    
+    def __init__(self):
+        super().__init__()
+        self.buffer = StringIO()
+    
+    def write(self, text):
+        if text.strip():  # Only emit non-empty text
+            self.output_signal.emit(text.rstrip())
+    
+    def flush(self):
+        pass
+
+
+# Import NLP module after setting up redirector
 from nlp import NLPProcessor
 
 
@@ -25,22 +46,31 @@ class ProcessingThread(QThread):
         super().__init__()
         self.input_path = input_path
         self.output_path = output_path
-        self.processor = NLPProcessor()
+        self.processor = None  # Don't create processor in __init__, do it in run()
     
     def run(self):
         """Run the processing in a separate thread."""
         try:
+            # Create processor in the worker thread, not the main thread
+            print("创建 NLP 处理器实例...")
+            self.processor = NLPProcessor()
+            
             def progress_callback(current, total):
                 self.progress_updated.emit(current, total)
             
+            print(f"开始处理文件: {self.input_path}")
             stats = self.processor.process_file(
                 self.input_path,
                 self.output_path,
                 progress_callback=progress_callback
             )
+            print("处理完成，发送结果...")
             self.processing_complete.emit(stats)
         except Exception as e:
-            self.processing_error.emit(str(e))
+            import traceback
+            error_detail = f"{type(e).__name__}: {str(e)}\n\n详细错误信息:\n{traceback.format_exc()}"
+            print(f"处理线程错误: {error_detail}")
+            self.processing_error.emit(error_detail)
 
 
 class NLPProcessorGUI(QMainWindow):
@@ -51,12 +81,17 @@ class NLPProcessorGUI(QMainWindow):
         self.input_file_path = None
         self.output_file_path = None
         self.processing_thread = None
+        
+        # Set up console output redirection
+        self.console_redirector = ConsoleRedirector()
+        self.console_redirector.output_signal.connect(self.log_to_console)
+        
         self.init_ui()
     
     def init_ui(self):
         """Initialize the user interface."""
         self.setWindowTitle('NLP Comment Processor')
-        self.setGeometry(100, 100, 700, 500)
+        self.setGeometry(100, 100, 700, 550)  # Increased height for console
         
         # Create central widget and main layout
         central_widget = QWidget()
@@ -134,11 +169,23 @@ class NLPProcessorGUI(QMainWindow):
         main_layout.addSpacing(10)
         
         # Results text area
+        results_label = QLabel('Processing Results:')
+        main_layout.addWidget(results_label)
         self.results_text = QTextEdit()
         self.results_text.setReadOnly(True)
-        self.results_text.setMaximumHeight(150)
+        self.results_text.setMaximumHeight(120)
         self.results_text.setPlaceholderText('Processing results will appear here...')
         main_layout.addWidget(self.results_text)
+        
+        # Console/Log output area
+        console_label = QLabel('Console Output:')
+        main_layout.addWidget(console_label)
+        self.console_text = QTextEdit()
+        self.console_text.setReadOnly(True)
+        self.console_text.setMaximumHeight(100)
+        self.console_text.setPlaceholderText('Processing logs will appear here...')
+        self.console_text.setStyleSheet('background-color: #f5f5f5; font-family: Consolas, monospace; font-size: 9pt;')
+        main_layout.addWidget(self.console_text)
         
         # Process button
         self.process_btn = QPushButton('Process Comments')
@@ -221,6 +268,13 @@ class NLPProcessorGUI(QMainWindow):
         else:
             self.process_btn.setEnabled(False)
     
+    def log_to_console(self, message):
+        """Append message to console output."""
+        self.console_text.append(message)
+        # Auto-scroll to bottom
+        scrollbar = self.console_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+    
     def process_comments(self):
         """Start processing the comments."""
         if not self.input_file_path or not self.output_file_path:
@@ -240,6 +294,8 @@ class NLPProcessorGUI(QMainWindow):
         self.progress_bar.setValue(0)
         self.progress_label.setText('Processing...')
         self.results_text.clear()
+        self.console_text.clear()
+        self.log_to_console('开始处理...')
         self.statusBar().showMessage('Processing comments...')
         
         # Create and start processing thread
@@ -317,14 +373,26 @@ class NLPProcessorGUI(QMainWindow):
 
 def main():
     """Main entry point for the application."""
-    app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Use Fusion style for better cross-platform appearance
-    
-    window = NLPProcessorGUI()
-    window.show()
-    
-    sys.exit(app.exec_())
+    try:
+        app = QApplication(sys.argv)
+        app.setStyle('Fusion')  # Use Fusion style for better cross-platform appearance
+        
+        window = NLPProcessorGUI()
+        window.show()
+        
+        return app.exec_()
+    except Exception as e:
+        import traceback
+        error_msg = f"GUI 启动失败:\n{type(e).__name__}: {str(e)}\n\n{traceback.format_exc()}"
+        print(error_msg)
+        # Try to show error in message box if possible
+        try:
+            app = QApplication.instance() or QApplication(sys.argv)
+            QMessageBox.critical(None, "启动错误", error_msg)
+        except:
+            pass
+        return 1
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

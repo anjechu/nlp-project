@@ -129,14 +129,25 @@ class SentimentEngine:
         print("❤️ 正在初始化情感分析模型...")
         model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
         try:
+            print(f"  📥 下载/加载 tokenizer...")
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            print(f"  📥 下载/加载模型 (首次运行可能需要几分钟)...")
             self.model = AutoModelForSequenceClassification.from_pretrained(
                 model_name, use_safetensors=True
-            ).to(GPU_DEVICE)
+            )
+            print(f"  🎯 将模型移至 {GPU_DEVICE}...")
+            self.model = self.model.to(GPU_DEVICE)
             self.model.eval()
+            print(f"  ✅ 模型加载完成！")
         except Exception as e:
-            print(f"❌ 模型加载失败: {e}")
-            raise e
+            error_msg = f"模型加载失败: {type(e).__name__}: {str(e)}"
+            print(f"❌ {error_msg}")
+            # Provide more helpful error message
+            if "out of memory" in str(e).lower() or "oom" in str(e).lower():
+                error_msg += "\n建议：尝试关闭其他占用GPU的程序，或使用CPU模式"
+            elif "connection" in str(e).lower() or "network" in str(e).lower():
+                error_msg += "\n建议：检查网络连接，模型需要从 huggingface.co 下载"
+            raise RuntimeError(error_msg) from e
 
     def analyze(self, texts, batch_size=32, progress_callback=None):
         results = []

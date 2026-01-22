@@ -100,8 +100,8 @@ def test_gui_components():
     print("  ✓ Initial state is correct")
     
     # Test file selection simulation
-    window.input_file_path = '/tmp/test_input.json'
-    window.output_file_path = '/tmp/test_output.json'
+    window.input_file_path = os.path.join(tempfile.gettempdir(), 'test_input.json')
+    window.output_file_path = os.path.join(tempfile.gettempdir(), 'test_output.json')
     window.check_ready_to_process()
     assert window.process_btn.isEnabled()
     print("  ✓ File selection enables process button")

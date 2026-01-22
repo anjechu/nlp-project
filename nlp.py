@@ -51,9 +51,11 @@ class NLPProcessor:
         
         # Calculate sentiment score (-1 to 1)
         total_sentiment_words = positive_count + negative_count
+        # Handle case where no sentiment words are found
         if total_sentiment_words == 0:
             sentiment_score = 0.0
         else:
+            # Safe division - denominator is guaranteed to be non-zero
             sentiment_score = (positive_count - negative_count) / total_sentiment_words
         
         # Determine sentiment label

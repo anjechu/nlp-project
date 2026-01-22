@@ -1,5 +1,31 @@
 # Troubleshooting Guide
 
+## ⚠️ AMD 显卡用户必读 (AMD GPU Users - IMPORTANT)
+
+### 问题：AMD DirectML 导致静默崩溃
+**症状**: 程序显示"成功激活 AMD GPU 加速"后立即闪退，无任何错误信息。
+
+**根本原因**: 
+- AMD DirectML (torch-directml) 对复杂的 Transformer 模型（如 XLM-RoBERTa）存在底层兼容性问题
+- 某些算子(Operator)不被支持，触发 C++ 层面的段错误(Segfault)
+- 进程直接死亡，Python 无法捕获异常
+
+**解决方案 (已默认启用)**:
+从最新版本开始，**AMD DirectML 已被默认禁用**，程序将自动使用 CPU 模式。
+
+如果您仍想尝试 AMD GPU（不推荐），可以设置环境变量：
+```bash
+set USE_DIRECTML=1
+python gui.py
+```
+
+**性能对比**:
+- AMD GPU (DirectML): ❌ 不稳定，经常崩溃
+- NVIDIA GPU (CUDA): ✅ 快速且稳定
+- CPU: ✅ 稳定但较慢（推荐 AMD 用户使用）
+
+---
+
 ## GUI 闪退问题 (GUI Crash Issues)
 
 ### 症状 (Symptoms)

@@ -2,6 +2,22 @@
 
 A PyQt5-based GUI application for advanced NLP processing and analysis of user comments with GPU acceleration, transformer models, and topic clustering.
 
+## ⚠️ Important Note for AMD GPU Users
+
+**AMD DirectML is disabled by default** due to compatibility issues with transformer models that cause silent crashes. The application will automatically use CPU mode, which is stable and reliable.
+
+- ✅ **NVIDIA GPU (CUDA)**: Fully supported and recommended
+- ✅ **CPU Mode**: Stable for all systems (default for AMD)
+- ⚠️ **AMD GPU (DirectML)**: Disabled by default due to instability
+
+If you have an AMD GPU and want to try GPU acceleration (not recommended):
+```bash
+set USE_DIRECTML=1
+python gui.py
+```
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for details.
+
 ## Features
 
 - **User-Friendly GUI**: Simple and intuitive interface built with PyQt5
@@ -22,7 +38,7 @@ A PyQt5-based GUI application for advanced NLP processing and analysis of user c
 ### Requirements
 
 - Python 3.8 or higher
-- CUDA-compatible GPU (optional, will use CPU if not available)
+- NVIDIA CUDA-compatible GPU (optional, recommended for best performance)
 - 8GB+ RAM recommended
 
 ### Install Dependencies

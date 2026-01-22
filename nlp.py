@@ -25,17 +25,34 @@ from tqdm import tqdm
 # 0. 硬件环境检测
 # ==========================================
 def get_device():
-    try:
-        import torch_directml
-        device = torch_directml.device()
-        print(f"🚀 成功激活 AMD GPU 加速: {torch_directml.device_name(0)}")
-        return device
-    except ImportError:
-        pass
+    """
+    检测并返回可用的计算设备。
+    
+    注意：AMD DirectML 对某些 Transformer 模型存在兼容性问题，可能导致静默崩溃。
+    默认禁用 DirectML，仅使用 CUDA 或 CPU。
+    
+    如需启用 AMD GPU，请设置环境变量: USE_DIRECTML=1
+    """
+    import os
+    
+    # 检查是否明确要求使用 DirectML
+    use_directml = os.environ.get('USE_DIRECTML', '0') == '1'
+    
+    if use_directml:
+        try:
+            import torch_directml
+            device = torch_directml.device()
+            print(f"🚀 成功激活 AMD GPU 加速: {torch_directml.device_name(0)}")
+            print(f"⚠️  警告：AMD DirectML 可能不稳定，如遇崩溃请使用 CPU 模式")
+            return device
+        except ImportError:
+            print("⚠️  未找到 torch-directml，尝试其他设备...")
+    
     if torch.cuda.is_available():
         print("🚀 成功激活 NVIDIA GPU (CUDA)")
         return torch.device("cuda")
-    print("🐢 未检测到 GPU，使用 CPU。")
+    
+    print("🐢 使用 CPU 模式（推荐用于 AMD 显卡以避免兼容性问题）")
     return torch.device("cpu")
 
 GPU_DEVICE = get_device()

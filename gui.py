@@ -56,10 +56,18 @@ class NLPApp(ctk.CTk):
         
         # Initialize LLM report generator if available
         self.llm_generator = None
+        self.use_ollama = False  # Can be configured via settings
         if LLM_AVAILABLE:
             try:
-                self.llm_generator = LLMReportGenerator()
-                print("✅ LLM Report Generator initialized")
+                # Try Ollama first (easier for local setup)
+                self.llm_generator = LLMReportGenerator(use_ollama=True, ollama_model="qwen:7b")
+                if self.llm_generator.llm_available:
+                    self.use_ollama = True
+                    print("✅ LLM Report Generator initialized (Ollama)")
+                else:
+                    # Fallback to HuggingFace
+                    self.llm_generator = LLMReportGenerator(use_ollama=False)
+                    print("✅ LLM Report Generator initialized (HuggingFace)")
             except Exception as e:
                 print(f"⚠️ Failed to initialize LLM: {e}")
                 self.llm_generator = None
@@ -357,11 +365,41 @@ class NLPApp(ctk.CTk):
                     summary = topic['summary'][:150]
                     text += f"     💡 Insight: {summary}{'...' if len(topic['summary']) > 150 else ''}\n"
                 
+                # Show cross-cultural analysis if available
+                if 'cultural_analysis' in topic:
+                    cultural = topic['cultural_analysis']
+                    dist = cultural.get('distribution', {})
+                    if dist:
+                        cultures_str = ' | '.join([f"{culture}: {count}" for culture, count in dist.items()])
+                        text += f"     🌍 Cultural: {cultures_str}\n"
+                    
+                    # Show LLM cultural insight if available
+                    if 'llm_insight' in cultural:
+                        insight = cultural['llm_insight'][:120]
+                        text += f"     🗺️  Cross-Cultural: {insight}{'...' if len(cultural['llm_insight']) > 120 else ''}\n"
+                
                 # Show representative sentence
                 rep_sentences = topic.get('representative_sentences', [])
                 if rep_sentences:
                     text += f"     💬 Example: \"{rep_sentences[0][:80]}{'...' if len(rep_sentences[0]) > 80 else ''}\"\n"
                 
+                text += "\n"
+            
+            # Show overall cultural summary if available
+            if 'cultural_summary' in data:
+                text += f"  🌏 CROSS-CULTURAL SUMMARY:\n"
+                summary = data['cultural_summary']
+                # Wrap text nicely
+                words = summary.split()
+                line = "     "
+                for word in words:
+                    if len(line) + len(word) + 1 > 80:
+                        text += line + "\n"
+                        line = "     " + word
+                    else:
+                        line += " " + word if line != "     " else word
+                if line != "     ":
+                    text += line + "\n"
                 text += "\n"
             
             # Show charts data if available

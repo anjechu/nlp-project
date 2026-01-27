@@ -1,6 +1,6 @@
 """
 LLM-Enhanced Report Generator
-Integrates Qwen local LLM to generate enhanced insights with topic naming and visualizations
+Integrates Qwen local LLM (via Ollama or HuggingFace) to generate enhanced insights with cross-cultural analysis
 """
 
 import json
@@ -9,47 +9,113 @@ from typing import Dict, List, Optional
 import numpy as np
 
 class LLMReportGenerator:
-    """Generates enhanced reports using local LLM (Qwen) for topic naming and insights"""
+    """Generates enhanced reports using local LLM (Qwen) for topic naming and cross-cultural insights"""
     
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: Optional[str] = None, use_ollama: bool = False, ollama_model: str = "qwen:7b"):
         """
         Initialize the LLM report generator
         
         Args:
-            model_path: Path to local Qwen model (if None, will try to auto-detect or use API)
+            model_path: Path to local Qwen model via HuggingFace (if None, will try to auto-detect)
+            use_ollama: If True, use Ollama API instead of loading model directly
+            ollama_model: Ollama model name (default: "qwen:7b")
         """
         self.model_path = model_path
+        self.use_ollama = use_ollama
+        self.ollama_model = ollama_model
         self.llm_available = False
         self.model = None
         self.tokenizer = None
         self._init_llm()
     
     def _init_llm(self):
-        """Initialize the Qwen LLM model"""
+        """Initialize the Qwen LLM model (via Ollama or HuggingFace)"""
+        if self.use_ollama:
+            try:
+                import requests
+                # Test Ollama connection
+                response = requests.get('http://localhost:11434/api/tags', timeout=2)
+                if response.status_code == 200:
+                    self.llm_available = True
+                    print(f"✅ Connected to Ollama with model: {self.ollama_model}")
+                else:
+                    raise Exception("Ollama not responding")
+            except Exception as e:
+                print(f"⚠️ Ollama not available: {e}")
+                print("📝 Make sure Ollama is running: ollama serve")
+                print(f"📝 And model is pulled: ollama pull {self.ollama_model}")
+                self.llm_available = False
+        else:
+            try:
+                from transformers import AutoModelForCausalLM, AutoTokenizer
+                
+                # Try to load Qwen model
+                model_name = self.model_path or "Qwen/Qwen-7B-Chat"  # Default to Qwen chat model
+                
+                print(f"🤖 Loading LLM model: {model_name}...")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    model_name, 
+                    trust_remote_code=True
+                )
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    device_map="auto",
+                    trust_remote_code=True
+                ).eval()
+                
+                self.llm_available = True
+                print("✅ LLM model loaded successfully")
+                
+            except Exception as e:
+                print(f"⚠️ LLM not available: {e}")
+                print("📝 Will generate basic reports without LLM enhancement")
+                self.llm_available = False
+    
+    def _query_ollama(self, prompt: str, max_tokens: int = 100) -> str:
+        """Query Ollama API"""
+        import requests
+        
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            
-            # Try to load Qwen model
-            model_name = self.model_path or "Qwen/Qwen-7B-Chat"  # Default to Qwen chat model
-            
-            print(f"🤖 Loading LLM model: {model_name}...")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_name, 
-                trust_remote_code=True
+            response = requests.post(
+                'http://localhost:11434/api/generate',
+                json={
+                    'model': self.ollama_model,
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {
+                        'temperature': 0.7,
+                        'num_predict': max_tokens
+                    }
+                },
+                timeout=30
             )
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                device_map="auto",
-                trust_remote_code=True
-            ).eval()
             
-            self.llm_available = True
-            print("✅ LLM model loaded successfully")
-            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('response', '').strip()
+            else:
+                return ""
         except Exception as e:
-            print(f"⚠️ LLM not available: {e}")
-            print("📝 Will generate basic reports without LLM enhancement")
-            self.llm_available = False
+            print(f"⚠️ Ollama query failed: {e}")
+            return ""
+    
+    def _query_llm(self, prompt: str, max_tokens: int = 100) -> str:
+        """Query LLM (Ollama or HuggingFace)"""
+        if self.use_ollama:
+            return self._query_ollama(prompt, max_tokens)
+        else:
+            # HuggingFace transformers
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            outputs = self.model.generate(
+                inputs.input_ids,
+                max_new_tokens=max_tokens,
+                temperature=0.7,
+                do_sample=True,
+                pad_token_id=self.tokenizer.pad_token_id
+            )
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            # Extract the response part (after the prompt)
+            return response[len(prompt):].strip()
     
     def generate_topic_name(self, topic_data: Dict) -> str:
         """
@@ -83,19 +149,8 @@ Sentiment: {sentiment}
 
 Topic name (2-3 words only, no explanation):"""
             
-            # Generate response using standard transformers interface
-            inputs = self.tokenizer(prompt, return_tensors="pt")
-            outputs = self.model.generate(
-                inputs.input_ids,
-                max_new_tokens=50,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=self.tokenizer.pad_token_id
-            )
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            # Extract the response part (after the prompt)
-            response = response[len(prompt):].strip()
+            # Query LLM
+            response = self._query_llm(prompt, max_tokens=50)
             
             # Extract clean topic name (remove any extra explanation)
             topic_name = response.strip().split('\n')[0].strip()
@@ -163,19 +218,8 @@ Number of players mentioning this: {density}
 
 Provide a concise insight summary (2-3 sentences):"""
             
-            # Generate response using standard transformers interface
-            inputs = self.tokenizer(prompt, return_tensors="pt")
-            outputs = self.model.generate(
-                inputs.input_ids,
-                max_new_tokens=100,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=self.tokenizer.pad_token_id
-            )
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            # Extract the response part (after the prompt)
-            response = response[len(prompt):].strip()
+            # Query LLM
+            response = self._query_llm(prompt, max_tokens=150)
             return response.strip()
             
         except Exception as e:
@@ -197,16 +241,83 @@ Provide a concise insight summary (2-3 sentences):"""
         return (f"{density} players discussed {topic_name}, expressing {sentiment_desc.get(sentiment, 'mixed')} "
                 f"sentiment (score: {score:.2f}). This represents a significant theme in player feedback.")
     
-    def generate_enhanced_report(self, nlp_result: Dict, include_charts: bool = True) -> Dict:
+    def analyze_cross_cultural_preferences(self, topic_data: Dict, topic_name: str) -> Dict:
         """
-        Generate an enhanced report with LLM-generated topic names and insights
+        Analyze cross-cultural preferences for a topic
+        
+        Args:
+            topic_data: Dictionary containing topic information
+            topic_name: The generated topic name
+            
+        Returns:
+            Dictionary with cultural analysis (likes, dislikes per culture)
+        """
+        cultural_dist = topic_data.get('cultural_distribution', {})
+        
+        # Map language codes to readable names
+        lang_map = {
+            'schinese': 'Chinese',
+            'tchinese': 'Chinese',
+            'japanese': 'Japanese',
+            'english': 'English',
+            'korean': 'Korean'
+        }
+        
+        # Basic analysis without LLM
+        analysis = {
+            'distribution': {lang_map.get(lang, lang.capitalize()): count 
+                           for lang, count in cultural_dist.items()},
+            'dominant_culture': None,
+            'cultural_insights': {}
+        }
+        
+        if cultural_dist:
+            dominant_lang = max(cultural_dist.items(), key=lambda x: x[1])[0]
+            analysis['dominant_culture'] = lang_map.get(dominant_lang, dominant_lang.capitalize())
+        
+        # If LLM available, generate deeper insights
+        if self.llm_available and len(cultural_dist) > 1:
+            try:
+                # Get sentiment by culture
+                sentiment = topic_data.get('sentiment_label', 'neutral')
+                score = topic_data.get('sentiment_score', 0)
+                samples = topic_data.get('sample_texts', [])[:10]
+                
+                prompt = f"""Analyze this game feedback topic "{topic_name}" from a cross-cultural perspective:
+
+Cultural Distribution:
+{chr(10).join(f'- {lang_map.get(lang, lang)}: {count} players' for lang, count in cultural_dist.items())}
+
+Sample Feedback (mixed languages):
+{chr(10).join(f'- {s}' for s in samples[:5])}
+
+Overall Sentiment: {sentiment} ({score:.2f})
+
+Provide brief insights (2-3 sentences) on:
+1. What aspects do different cultural groups particularly appreciate or dislike?
+2. Are there any notable cultural differences in how this topic is perceived?
+
+Answer:"""
+                
+                response = self._query_llm(prompt, max_tokens=200)
+                analysis['llm_insight'] = response.strip()
+                
+            except Exception as e:
+                print(f"⚠️ Error in cultural analysis: {e}")
+        
+        return analysis
+    
+    def generate_enhanced_report(self, nlp_result: Dict, include_charts: bool = True, include_cultural_analysis: bool = True) -> Dict:
+        """
+        Generate an enhanced report with LLM-generated topic names, insights, and cross-cultural analysis
         
         Args:
             nlp_result: The original NLP processing result
             include_charts: Whether to generate chart data
+            include_cultural_analysis: Whether to include cross-cultural analysis
             
         Returns:
-            Enhanced report dictionary with topic names, summaries, and chart data
+            Enhanced report dictionary with topic names, summaries, cultural insights, and chart data
         """
         enhanced_topics = []
         
@@ -224,20 +335,85 @@ Provide a concise insight summary (2-3 sentences):"""
                 'summary': summary
             }
             
+            # Add cross-cultural analysis if requested
+            if include_cultural_analysis:
+                cultural_analysis = self.analyze_cross_cultural_preferences(topic, topic_name)
+                enhanced_topic['cultural_analysis'] = cultural_analysis
+            
             enhanced_topics.append(enhanced_topic)
         
         # Create enhanced report
         enhanced_report = {
             'statistics': nlp_result.get('statistics', {}),
             'topics': enhanced_topics,
-            'llm_enhanced': self.llm_available
+            'llm_enhanced': self.llm_available,
+            'cross_cultural': include_cultural_analysis
         }
         
         # Add chart data if requested
         if include_charts:
             enhanced_report['charts'] = self._generate_chart_data(enhanced_topics)
         
+        # Add overall cross-cultural summary if requested
+        if include_cultural_analysis and self.llm_available:
+            enhanced_report['cultural_summary'] = self._generate_cultural_summary(enhanced_topics)
+        
         return enhanced_report
+    
+    def _generate_cultural_summary(self, topics: List[Dict]) -> str:
+        """Generate an overall cross-cultural summary across all topics"""
+        if not self.llm_available:
+            return "Cross-cultural analysis requires LLM support."
+        
+        try:
+            # Aggregate cultural data
+            all_cultures = {}
+            for topic in topics:
+                dist = topic.get('cultural_distribution', {})
+                for lang, count in dist.items():
+                    all_cultures[lang] = all_cultures.get(lang, 0) + count
+            
+            # Map to readable names
+            lang_map = {
+                'schinese': 'Chinese',
+                'tchinese': 'Chinese', 
+                'japanese': 'Japanese',
+                'english': 'English',
+                'korean': 'Korean'
+            }
+            
+            cultural_summary = {lang_map.get(lang, lang.capitalize()): count 
+                              for lang, count in all_cultures.items()}
+            
+            # Get top positive and negative topics
+            sorted_topics = sorted(topics, key=lambda x: x.get('sentiment_score', 0), reverse=True)
+            top_positive = [t.get('topic_name', 'Topic') for t in sorted_topics[:3]]
+            top_negative = [t.get('topic_name', 'Topic') for t in sorted_topics[-3:]]
+            
+            prompt = f"""Provide a cross-cultural analysis summary for this game feedback:
+
+Player Distribution:
+{chr(10).join(f'- {culture}: {count} players' for culture, count in cultural_summary.items())}
+
+Most Praised Aspects:
+{chr(10).join(f'- {name}' for name in top_positive)}
+
+Most Criticized Aspects:
+{chr(10).join(f'- {name}' for name in top_negative)}
+
+Provide a 3-4 sentence summary highlighting:
+1. Key differences in preferences between Chinese, Japanese, and English-speaking players
+2. Common themes across all cultures
+3. Notable cultural insights for developers
+
+Summary:"""
+            
+            response = self._query_llm(prompt, max_tokens=250)
+            return response.strip()
+            
+        except Exception as e:
+            print(f"⚠️ Error generating cultural summary: {e}")
+            return "Unable to generate cultural summary."
     
     def _generate_chart_data(self, topics: List[Dict]) -> Dict:
         """Generate data for charts and visualizations"""

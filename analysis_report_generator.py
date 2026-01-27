@@ -13,6 +13,9 @@ from io import BytesIO
 class AnalysisReportGenerator:
     """Generates comprehensive cross-cultural analysis reports in HTML format"""
     
+    # Supported languages for analysis
+    SUPPORTED_LANGUAGES = ['chinese', 'japanese', 'english']
+    
     def __init__(self, llm_generator=None, chart_generator=None):
         """
         Initialize the analysis report generator
@@ -100,11 +103,11 @@ class AnalysisReportGenerator:
         name = re.sub(r'^Report_', '', name)
         name = re.sub(r'^comments_', '', name, flags=re.IGNORECASE)
         
-        # Extract language suffix (chinese, japanese, english)
+        # Extract language suffix (using supported languages)
         language = 'unknown'
         game_name = name
         
-        for lang in ['chinese', 'japanese', 'english']:
+        for lang in self.SUPPORTED_LANGUAGES:
             if name.lower().endswith(f'_{lang}'):
                 language = lang
                 # Remove language suffix from game name
@@ -1002,14 +1005,14 @@ class AnalysisReportGenerator:
                 </style>
                 
                 <div class="language-tabs">
-                    <div class="language-tab active" onclick="switchLanguage('chinese')">🇨🇳 中文</div>
-                    <div class="language-tab" onclick="switchLanguage('japanese')">🇯🇵 日本語</div>
-                    <div class="language-tab" onclick="switchLanguage('english')">🇬🇧 English</div>
+                    <div class="language-tab active" data-lang="chinese" onclick="switchLanguage('chinese')">🇨🇳 中文</div>
+                    <div class="language-tab" data-lang="japanese" onclick="switchLanguage('japanese')">🇯🇵 日本語</div>
+                    <div class="language-tab" data-lang="english" onclick="switchLanguage('english')">🇬🇧 English</div>
 """
         
         if by_language['Other']:
             html += """
-                    <div class="language-tab" onclick="switchLanguage('other')">🌐 Other</div>
+                    <div class="language-tab" data-lang="other" onclick="switchLanguage('other')">🌐 Other</div>
 """
         
         html += """
@@ -1021,10 +1024,8 @@ class AnalysisReportGenerator:
                         const tabs = document.querySelectorAll('.language-tab');
                         tabs.forEach(tab => tab.classList.remove('active'));
                         
-                        // Find and activate the clicked tab
-                        const clickedTab = Array.from(tabs).find(tab => 
-                            tab.getAttribute('onclick').includes("'" + lang + "'")
-                        );
+                        // Find and activate the clicked tab using data attribute
+                        const clickedTab = document.querySelector(`.language-tab[data-lang="${lang}"]`);
                         if (clickedTab) clickedTab.classList.add('active');
                         
                         // Update content

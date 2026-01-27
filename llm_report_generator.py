@@ -19,7 +19,8 @@ class LLMReportGenerator:
         'tchinese': 'Chinese',
         'japanese': 'Japanese',
         'english': 'English',
-        'korean': 'Korean'
+        'korean': 'Korean',
+        'koreana': 'Korean'
     }
     
     # Topic naming configuration

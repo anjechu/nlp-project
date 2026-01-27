@@ -1594,27 +1594,21 @@ class AnalysisReportGenerator:
     
     def _clean_topic_name(self, name: str) -> str:
         """
-        Clean topic name by removing unwanted prefixes, suffixes, and special characters.
-        Handles cases like:
-        - "• 光影问题" -> "光影问题"
-        - "1. Weapon Balance Issues" -> "Weapon Balance Issues"
-        - "- テクノロジーの冒険: 34 mentions" -> "テクノロジーの冒険"
-        - "太好玩了啊啊啊啊啊: 77 mentions" -> "太好玩了啊啊啊啊啊"
+        Lightweight cleaning of topic names as a safety net.
+        Main cleaning is done by LLM validation during generation.
+        This just handles edge cases and basic cleanup.
         """
         if not name:
             return name
         
+        # Simple cleanup - just strip common unwanted characters
+        # LLM validation during generation handles the heavy lifting
+        name = name.strip('"\'•–—: ').strip('-')
+        
+        # Remove excessive repeated characters (safety net for edge cases)
         import re
-        # Remove leading bullets, numbers, dashes, and special characters
-        name = re.sub(r'^[•\-–—\d\.\)]+\s*', '', name)
-        name = re.sub(r'^\d+\.\s*', '', name)  # Remove "1. " style numbering
-        name = re.sub(r'^[:\-–—]\s*', '', name)  # Remove leading colons/dashes
-        # Remove trailing mention counts like ": 77 mentions" or "- 34 mentions"
-        name = re.sub(r'\s*[:\-–—]\s*\d+\s*mentions?\s*$', '', name, flags=re.IGNORECASE)
-        # Remove excessive repeated characters (like "啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊")
-        # Keep at most 3 repeated characters
-        name = re.sub(r'(.)\1{3,}', r'\1\1\1', name)
-        name = name.strip(r'"\'•\-–—: ')  # Strip quotes and special chars
+        name = re.sub(r'(.)\1{5,}', r'\1\1\1', name)
+        
         return name.strip()
     
     def _get_culture_name(self, lang_code: str) -> str:

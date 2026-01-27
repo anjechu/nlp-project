@@ -440,12 +440,17 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10,1
         return enhanced_report
     
     def _generate_cultural_summary(self, topics: List[Dict]) -> str:
-        """Generate an overall cross-cultural summary across all topics"""
+        """
+        Generate an overall cross-cultural summary across ALL valuable topics
+        
+        Important: This receives ALL LLM-filtered valuable topics and uses them all
+        to generate the summary, not just a subset.
+        """
         if not self.llm_available:
             return "Cross-cultural analysis requires LLM support."
         
         try:
-            # Aggregate cultural data
+            # Aggregate cultural data from ALL topics
             all_cultures = {}
             for topic in topics:
                 dist = topic.get('cultural_distribution', {})
@@ -456,30 +461,45 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10,1
             cultural_summary = {self.LANG_MAP.get(lang, lang.capitalize()): count 
                               for lang, count in all_cultures.items()}
             
-            # Get top positive and negative topics
+            # Categorize ALL topics by sentiment for comprehensive analysis
             sorted_topics = sorted(topics, key=lambda x: x.get('sentiment_score', 0), reverse=True)
-            top_positive = [t.get('topic_name', 'Topic') for t in sorted_topics[:3]]
-            top_negative = [t.get('topic_name', 'Topic') for t in sorted_topics[-3:]]
+            positive_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) > 0]
+            negative_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) < 0]
+            neutral_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) == 0]
             
-            prompt = f"""Provide a cross-cultural analysis summary for this game feedback:
+            # Prepare ALL topic information for LLM (not just top 3/3)
+            all_topic_info = []
+            for t in topics:
+                name = t.get('topic_name', 'Topic')
+                sentiment = t.get('sentiment_label', 'neutral')
+                score = t.get('sentiment_score', 0)
+                density = t.get('density', 0)
+                all_topic_info.append(f"  • {name} ({sentiment}, score: {score:+.2f}, {density} players)")
+            
+            prompt = f"""Provide a cross-cultural analysis summary for this game feedback.
 
 Player Distribution:
 {chr(10).join(f'- {culture}: {count} players' for culture, count in cultural_summary.items())}
 
-Most Praised Aspects:
-{chr(10).join(f'- {name}' for name in top_positive)}
+ALL {len(topics)} Valuable Topics Analyzed:
 
-Most Criticized Aspects:
-{chr(10).join(f'- {name}' for name in top_negative)}
+Positive Topics ({len(positive_topics)}):
+{chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" for t in positive_topics])}
 
-Provide a 3-4 sentence summary highlighting:
+Negative Topics ({len(negative_topics)}):
+{chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" for t in negative_topics])}
+
+Neutral Topics ({len(neutral_topics)}):
+{chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" for t in neutral_topics])}
+
+Provide a comprehensive 3-4 sentence summary considering ALL {len(topics)} topics above, highlighting:
 1. Key differences in preferences between Chinese, Japanese, and English-speaking players
 2. Common themes across all cultures
 3. Notable cultural insights for developers
 
 Summary:"""
             
-            response = self._query_llm(prompt, max_tokens=250)
+            response = self._query_llm(prompt, max_tokens=300)
             return response.strip()
             
         except Exception as e:

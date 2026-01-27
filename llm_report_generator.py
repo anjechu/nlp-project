@@ -308,8 +308,32 @@ English topic name:"""
         if any_words:
             return ' '.join(any_words)
         
-        # Absolute last resort - use a more descriptive generic name
-        return "Discussion Topic"
+        # Fifth pass: Look for ANY content in the sentences that might help
+        # Extract capitalized words, longer words, or words with numbers
+        all_potential = []
+        for s in sentences[:5]:
+            for word in s.split():
+                word_clean = word.strip('.,!?;:()[]{}"\'-')
+                # Look for: capitalized words, longer words (>4 chars), words with numbers
+                if (word_clean and len(word_clean) > 4) or (word_clean and word_clean[0].isupper()) or any(c.isdigit() for c in word_clean):
+                    latin_chars = sum(1 for c in word_clean if ord(c) < 128)
+                    if latin_chars > len(word_clean) * 0.7:  # More lenient Latin threshold
+                        all_potential.append(word_clean.title())
+        
+        if all_potential:
+            # Remove duplicates and common words
+            unique_potential = []
+            for word in all_potential:
+                if word.lower() not in common_words and word not in unique_potential:
+                    unique_potential.append(word)
+                    if len(unique_potential) >= 2:
+                        break
+            
+            if unique_potential:
+                return ' '.join(unique_potential[:2])
+        
+        # Absolute last resort - use topic ID based name
+        return f"Topic {topic_data.get('topic_id', 'Unknown')}"
     
     def generate_topic_summary(self, topic_data: Dict, topic_name: str) -> str:
         """

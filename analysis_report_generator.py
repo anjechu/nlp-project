@@ -1019,8 +1019,9 @@ class AnalysisReportGenerator:
 """
                     if item['summary'] and is_llm:
                         summary_short = item['summary'][:100] + '...' if len(item['summary']) > 100 else item['summary']
+                        full_summary = item['summary'].replace('"', '&quot;').replace("'", '&#39;')
                         html += f"""
-                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic; cursor: help;" title="{full_summary}">{summary_short}</div>
 """
                     html += """
                             </div>
@@ -1046,8 +1047,9 @@ class AnalysisReportGenerator:
 """
                     if item['summary'] and is_llm:
                         summary_short = item['summary'][:100] + '...' if len(item['summary']) > 100 else item['summary']
+                        full_summary = item['summary'].replace('"', '&quot;').replace("'", '&#39;')
                         html += f"""
-                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic; cursor: help;" title="{full_summary}">{summary_short}</div>
 """
                     html += """
                             </div>

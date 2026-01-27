@@ -19,6 +19,19 @@ except ImportError:
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
+# Color scheme constants for modern dark theme
+THEME_DARK_BG = "#1a1a2e"
+THEME_DARKER_BG = "#16213e"
+THEME_BORDER = "#2d2d44"
+THEME_ACCENT_VIOLET = "#6c5ce7"
+THEME_ACCENT_VIOLET_HOVER = "#5f4dd1"
+THEME_ACCENT_BLUE = "#4a69bd"
+THEME_ACCENT_BLUE_HOVER = "#3c5a9a"
+THEME_TEXT_PRIMARY = "#e0e0e0"
+THEME_TEXT_SECONDARY = "#d0d0d0"
+THEME_TEXT_MUTED = "#a0a0a0"
+THEME_TEXT_DISABLED = "#808080"
+
 class NLPApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -29,27 +42,28 @@ class NLPApp(ctk.CTk):
         self.processor = NLPProcessor()
         self.input_file = None
         
-        # Store multiple loaded reports {filename: json_data}
+        # Store multiple loaded reports as a dictionary mapping filename to parsed JSON data
+        # Used to cache analysis results for multi-game comparison in LLM tab
         self.loaded_reports = {} 
 
         self._init_ui()
 
     def _init_ui(self):
         # Header with modern dark theme
-        self.header_frame = ctk.CTkFrame(self, fg_color="#1a1a2e", corner_radius=10, border_width=1, border_color="#2d2d44")
+        self.header_frame = ctk.CTkFrame(self, fg_color=THEME_DARK_BG, corner_radius=10, border_width=1, border_color=THEME_BORDER)
         self.header_frame.pack(pady=10, padx=20, fill="x")
         self.title_label = ctk.CTkLabel(
             self.header_frame, 
             text="📊 Game Feedback AI Agent", 
             font=("Segoe UI", 22, "bold"),
-            text_color="#e0e0e0"
+            text_color=THEME_TEXT_PRIMARY
         )
         self.title_label.pack(pady=12)
 
         # Tab view with refined styling
-        self.tab_view = ctk.CTkTabview(self, fg_color="#16213e", segmented_button_fg_color="#1a1a2e", 
-                                        segmented_button_selected_color="#6c5ce7", 
-                                        segmented_button_selected_hover_color="#5f4dd1")
+        self.tab_view = ctk.CTkTabview(self, fg_color=THEME_DARKER_BG, segmented_button_fg_color=THEME_DARK_BG, 
+                                        segmented_button_selected_color=THEME_ACCENT_VIOLET, 
+                                        segmented_button_selected_hover_color=THEME_ACCENT_VIOLET_HOVER)
         self.tab_view.pack(pady=10, padx=20, fill="both", expand=True)
         self.tab_process = self.tab_view.add("1. Data Processing")
         self.tab_report = self.tab_view.add("2. Insights Report")
@@ -61,20 +75,20 @@ class NLPApp(ctk.CTk):
 
     def _setup_process_tab(self):
         # Card-like frame with subtle borders
-        file_frame = ctk.CTkFrame(self.tab_process, fg_color="#1a1a2e", corner_radius=8, border_width=1, border_color="#2d2d44")
+        file_frame = ctk.CTkFrame(self.tab_process, fg_color=THEME_DARK_BG, corner_radius=8, border_width=1, border_color=THEME_BORDER)
         file_frame.pack(pady=10, padx=10, fill="x")
         self.btn_select = ctk.CTkButton(file_frame, text="📂 Select JSON Source File", command=self.select_file,
-                                         fg_color="#4a69bd", hover_color="#3c5a9a", corner_radius=6,
+                                         fg_color=THEME_ACCENT_BLUE, hover_color=THEME_ACCENT_BLUE_HOVER, corner_radius=6,
                                          font=("Segoe UI", 12))
         self.btn_select.pack(side="left", padx=10, pady=10)
-        self.lbl_filename = ctk.CTkLabel(file_frame, text="No file selected", text_color="#808080",
+        self.lbl_filename = ctk.CTkLabel(file_frame, text="No file selected", text_color=THEME_TEXT_DISABLED,
                                           font=("Segoe UI", 11))
         self.lbl_filename.pack(side="left", padx=10)
 
-        self.progress_bar = ctk.CTkProgressBar(self.tab_process, progress_color="#6c5ce7", fg_color="#2d2d44")
+        self.progress_bar = ctk.CTkProgressBar(self.tab_process, progress_color=THEME_ACCENT_VIOLET, fg_color=THEME_BORDER)
         self.progress_bar.pack(fill="x", padx=20, pady=10)
         self.progress_bar.set(0)
-        self.status_label = ctk.CTkLabel(self.tab_process, text="System Ready", text_color="#a0a0a0",
+        self.status_label = ctk.CTkLabel(self.tab_process, text="System Ready", text_color=THEME_TEXT_MUTED,
                                           font=("Segoe UI", 11))
         self.status_label.pack()
 
@@ -84,8 +98,8 @@ class NLPApp(ctk.CTk):
             text="🚀 Start NLP Engine (Generate New Report)", 
             command=self.start_analysis,
             state="disabled",
-            fg_color="#6c5ce7",
-            hover_color="#5f4dd1",
+            fg_color=THEME_ACCENT_VIOLET,
+            hover_color=THEME_ACCENT_VIOLET_HOVER,
             height=40,
             corner_radius=8,
             font=("Segoe UI", 14, "bold")
@@ -97,23 +111,23 @@ class NLPApp(ctk.CTk):
             self.tab_process,
             text="📂 Load Historical Reports (For LLM Analysis)",
             command=self.load_history_report,
-            fg_color="#4a69bd",
-            hover_color="#3c5a9a",
+            fg_color=THEME_ACCENT_BLUE,
+            hover_color=THEME_ACCENT_BLUE_HOVER,
             corner_radius=6,
             font=("Segoe UI", 12)
         )
         self.btn_load_history.pack(pady=5)
 
-        self.log_box = ctk.CTkTextbox(self.tab_process, height=200, fg_color="#1a1a2e", 
-                                       border_width=1, border_color="#2d2d44", corner_radius=8,
-                                       font=("Consolas", 11), text_color="#d0d0d0")
+        self.log_box = ctk.CTkTextbox(self.tab_process, height=200, fg_color=THEME_DARK_BG, 
+                                       border_width=1, border_color=THEME_BORDER, corner_radius=8,
+                                       font=("Consolas", 11), text_color=THEME_TEXT_SECONDARY)
         self.log_box.pack(pady=10, padx=10, fill="both", expand=True)
         self.log(f"Current Compute Device: {nlp.GLOBAL_DEVICE}")
 
     def _setup_report_tab(self):
         self.report_box = ctk.CTkTextbox(self.tab_report, font=("Consolas", 12), 
-                                          fg_color="#1a1a2e", border_width=1, border_color="#2d2d44",
-                                          corner_radius=8, text_color="#d0d0d0")
+                                          fg_color=THEME_DARK_BG, border_width=1, border_color=THEME_BORDER,
+                                          corner_radius=8, text_color=THEME_TEXT_SECONDARY)
         self.report_box.pack(fill="both", expand=True, padx=10, pady=10)
         self.report_box.insert("0.0", "Please load data first...")
 
@@ -122,23 +136,23 @@ class NLPApp(ctk.CTk):
         self.llm_frame.pack(fill="both", expand=True)
 
         # Left column input
-        self.left_col = ctk.CTkFrame(self.llm_frame, width=350, fg_color="#1a1a2e", 
-                                      corner_radius=8, border_width=1, border_color="#2d2d44")
+        self.left_col = ctk.CTkFrame(self.llm_frame, width=350, fg_color=THEME_DARK_BG, 
+                                      corner_radius=8, border_width=1, border_color=THEME_BORDER)
         self.left_col.pack(side="left", fill="y", padx=10, pady=10)
 
         ctk.CTkLabel(self.left_col, text="📝 New Game Design Proposal", 
-                     font=("Segoe UI", 14, "bold"), text_color="#e0e0e0").pack(pady=8)
-        self.design_input = ctk.CTkTextbox(self.left_col, height=150, fg_color="#16213e", 
-                                            border_width=1, border_color="#2d2d44", corner_radius=6,
-                                            font=("Segoe UI", 11), text_color="#d0d0d0")
+                     font=("Segoe UI", 14, "bold"), text_color=THEME_TEXT_PRIMARY).pack(pady=8)
+        self.design_input = ctk.CTkTextbox(self.left_col, height=150, fg_color=THEME_DARKER_BG, 
+                                            border_width=1, border_color=THEME_BORDER, corner_radius=6,
+                                            font=("Segoe UI", 11), text_color=THEME_TEXT_SECONDARY)
         self.design_input.pack(fill="x", padx=8, pady=5)
         self.design_input.insert("0.0", "e.g., A hardcore souls-like game emphasizing boss battle experience...")
 
         ctk.CTkLabel(self.left_col, text="🎯 Target Player Audience", 
-                     font=("Segoe UI", 14, "bold"), text_color="#e0e0e0").pack(pady=8)
-        self.target_audience = ctk.CTkEntry(self.left_col, fg_color="#16213e", 
-                                             border_width=1, border_color="#2d2d44", corner_radius=6,
-                                             font=("Segoe UI", 11), text_color="#d0d0d0")
+                     font=("Segoe UI", 14, "bold"), text_color=THEME_TEXT_PRIMARY).pack(pady=8)
+        self.target_audience = ctk.CTkEntry(self.left_col, fg_color=THEME_DARKER_BG, 
+                                             border_width=1, border_color=THEME_BORDER, corner_radius=6,
+                                             font=("Segoe UI", 11), text_color=THEME_TEXT_SECONDARY)
         self.target_audience.pack(fill="x", padx=8, pady=5)
         self.target_audience.insert(0, "Hardcore action players")
 
@@ -146,8 +160,8 @@ class NLPApp(ctk.CTk):
             self.left_col, 
             text="✨ Generate Multi-Game Prompt", 
             command=self.generate_prompt_logic,
-            fg_color="#6c5ce7", 
-            hover_color="#5f4dd1",
+            fg_color=THEME_ACCENT_VIOLET, 
+            hover_color=THEME_ACCENT_VIOLET_HOVER,
             height=40,
             corner_radius=8,
             font=("Segoe UI", 13, "bold")
@@ -155,14 +169,14 @@ class NLPApp(ctk.CTk):
         self.btn_generate_prompt.pack(pady=20, padx=8)
 
         # Right column preview
-        self.right_col = ctk.CTkFrame(self.llm_frame, fg_color="#1a1a2e", 
-                                       corner_radius=8, border_width=1, border_color="#2d2d44")
+        self.right_col = ctk.CTkFrame(self.llm_frame, fg_color=THEME_DARK_BG, 
+                                       corner_radius=8, border_width=1, border_color=THEME_BORDER)
         self.right_col.pack(side="right", fill="both", expand=True, padx=10, pady=10)
         ctk.CTkLabel(self.right_col, text="🤖 Final Prompt Preview", 
-                     font=("Segoe UI", 14, "bold"), text_color="#e0e0e0").pack(pady=8)
-        self.prompt_preview = ctk.CTkTextbox(self.right_col, fg_color="#16213e", 
-                                              border_width=1, border_color="#2d2d44", corner_radius=6,
-                                              font=("Consolas", 11), text_color="#d0d0d0")
+                     font=("Segoe UI", 14, "bold"), text_color=THEME_TEXT_PRIMARY).pack(pady=8)
+        self.prompt_preview = ctk.CTkTextbox(self.right_col, fg_color=THEME_DARKER_BG, 
+                                              border_width=1, border_color=THEME_BORDER, corner_radius=6,
+                                              font=("Consolas", 11), text_color=THEME_TEXT_SECONDARY)
         self.prompt_preview.pack(fill="both", expand=True, padx=8, pady=5)
 
     def log(self, message):
@@ -173,7 +187,7 @@ class NLPApp(ctk.CTk):
         file_path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json")])
         if file_path:
             self.input_file = file_path
-            self.lbl_filename.configure(text=os.path.basename(file_path), text_color="#6c5ce7")
+            self.lbl_filename.configure(text=os.path.basename(file_path), text_color=THEME_ACCENT_VIOLET)
             self.btn_run.configure(state="normal")
             self.log(f"Selected source file: {file_path}")
 
@@ -235,7 +249,7 @@ class NLPApp(ctk.CTk):
         count = 0
         for path in file_paths:
             fname = os.path.basename(path)
-            if fname in self.loaded_reports: continue # Avoid duplicates
+            if fname in self.loaded_reports: continue  # Avoid duplicates
             
             try:
                 with open(path, 'r', encoding='utf-8') as f:

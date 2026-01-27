@@ -24,12 +24,12 @@ class AnalysisReportGenerator:
         self.llm_generator = llm_generator
         self.chart_generator = chart_generator
     
-    def generate_analysis_report(self, nlp_data_list: List[Dict], output_dir: str = "analysis") -> str:
+    def generate_analysis_report(self, nlp_data, output_dir: str = "analysis") -> str:
         """
-        Generate a complete cross-cultural analysis report from multiple NLP reports
+        Generate a complete cross-cultural analysis report from one or multiple NLP reports
         
         Args:
-            nlp_data_list: List of NLP processing results to aggregate (can be single or multiple reports)
+            nlp_data: Single NLP dict OR list of NLP dicts to aggregate (backward compatible)
             output_dir: Directory to save analysis reports
             
         Returns:
@@ -38,15 +38,14 @@ class AnalysisReportGenerator:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
-        # Handle both single dict and list of dicts
-        if isinstance(nlp_data_list, dict):
-            nlp_data_list = [nlp_data_list]
+        # Convert to list for uniform processing (backward compatible)
+        nlp_data_list = nlp_data if isinstance(nlp_data, list) else [nlp_data]
         
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_name = f"analysis_{timestamp}"
         
-        print(f"🌏 Aggregating {len(nlp_data_list)} reports into unified cross-cultural analysis...")
+        print(f"🌏 Aggregating {len(nlp_data_list)} report(s) into unified cross-cultural analysis...")
         
         # Step 1: Aggregate all NLP data into one comprehensive dataset
         aggregated_data = self._aggregate_nlp_reports(nlp_data_list)

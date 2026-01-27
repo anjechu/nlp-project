@@ -5,7 +5,9 @@ Integrates Qwen local LLM (via Ollama or HuggingFace) to generate enhanced insig
 
 import json
 import os
+import re
 from typing import Dict, List, Optional
+from collections import Counter
 import numpy as np
 
 class LLMReportGenerator:
@@ -186,7 +188,6 @@ Topic name (2-3 words only, no explanation):"""
             words.extend(s.split())
         
         # Filter common words and take most frequent
-        from collections import Counter
         word_freq = Counter(words)
         # Remove very common words
         common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for'}
@@ -353,7 +354,6 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10,1
             response = self._query_llm(prompt, max_tokens=100)
             
             # Parse response to extract topic indices
-            import re
             numbers = re.findall(r'\d+', response)
             valuable_indices = {int(n) - 1 for n in numbers if n.isdigit() and 0 < int(n) <= len(topics)}
             

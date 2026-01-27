@@ -56,9 +56,15 @@ class ReportChartGenerator:
             plt.rcParams['font.sans-serif'] = [cjk_fonts[0]] + plt.rcParams['font.sans-serif']
             print(f"✅ Using CJK font: {cjk_fonts[0]}")
         else:
-            # Fallback: use DejaVu Sans and suppress warnings
+            # Fallback: use DejaVu Sans and suppress only glyph-missing warnings
             print("⚠️ No CJK fonts found, using fallback (some characters may not display)")
-            warnings.filterwarnings('ignore', category=UserWarning, message='.*Glyph.*missing.*')
+            # Suppress only the specific glyph-missing warnings to avoid noise
+            warnings.filterwarnings(
+                'ignore', 
+                category=UserWarning, 
+                module='matplotlib.backends.backend_agg',
+                message='.*Glyph.*missing from current font.*'
+            )
         
         # Set font fallback chain to handle missing glyphs gracefully
         plt.rcParams['font.family'] = 'sans-serif'

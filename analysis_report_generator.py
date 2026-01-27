@@ -16,6 +16,13 @@ class AnalysisReportGenerator:
     # Supported languages for analysis
     SUPPORTED_LANGUAGES = ['chinese', 'japanese', 'english']
     
+    # Language short form mapping
+    LANGUAGE_SHORT_FORMS = {
+        'cn': 'chinese',
+        'jp': 'japanese',
+        'en': 'english'
+    }
+    
     def __init__(self, llm_generator=None, chart_generator=None):
         """
         Initialize the analysis report generator
@@ -86,39 +93,75 @@ class AnalysisReportGenerator:
     def _parse_filename(self, filename: str) -> Dict:
         """
         Parse filename to extract game name and language
-        Format: comments_gamename_language or Report_comments_gamename_language
+        Format: Report_comments_gamename_language_timestamp
         
         Args:
-            filename: Report filename (e.g., 'comments_silksong_japanese', 'Report_comments_battlefield6_chinese')
+            filename: Report filename (e.g., 'Report_comments_bf6_chinese_20260124_023938')
             
         Returns:
             Dictionary with 'game' and 'language' keys
         """
-        import re
-        
         # Remove file extension
         name = os.path.splitext(filename)[0]
         
-        # Remove common prefixes
-        name = re.sub(r'^Report_', '', name)
-        name = re.sub(r'^comments_', '', name, flags=re.IGNORECASE)
+        # Split by underscore
+        parts = name.split('_')
         
-        # Extract language suffix (using supported languages)
-        language = 'unknown'
-        game_name = name
+        # Find language and its index
+        lang_index, language = self._find_language_in_parts(parts)
         
-        for lang in self.SUPPORTED_LANGUAGES:
-            if name.lower().endswith(f'_{lang}'):
-                language = lang
-                # Remove language suffix from game name
-                game_name = name[:-(len(lang)+1)]
-                break
+        # Find start index (after 'Report' and 'comments')
+        start_index = self._find_game_name_start_index(parts)
+        
+        # Extract game name
+        game_name = 'unknown'
+        if lang_index > 0 and start_index < lang_index:
+            game_parts = parts[start_index:lang_index]
+            game_name = '_'.join(game_parts)
         
         return {
             'game': game_name,
             'language': language,
             'original_filename': filename
         }
+    
+    def _find_language_in_parts(self, parts: List[str]) -> tuple:
+        """
+        Find language and its index in filename parts
+        
+        Returns:
+            Tuple of (index, language)
+        """
+        for i, part in enumerate(parts):
+            if part.lower() in self.SUPPORTED_LANGUAGES:
+                return i, part.lower()
+            # Check for short forms
+            if part.lower() in self.LANGUAGE_SHORT_FORMS:
+                return i, self.LANGUAGE_SHORT_FORMS[part.lower()]
+        return -1, 'unknown'
+    
+    def _find_game_name_start_index(self, parts: List[str]) -> int:
+        """
+        Find where game name starts in filename parts (after 'Report' and 'comments')
+        
+        Returns:
+            Start index for game name
+        """
+        for i, part in enumerate(parts):
+            if part.lower() == 'comments':
+                return i + 1
+            elif (part.lower() == 'report' and 
+                  i + 1 < len(parts) and 
+                  parts[i + 1].lower() == 'comments' and
+                  i + 2 < len(parts)):  # Ensure i+2 is valid
+                return i + 2
+        
+        # Fallback: skip 'Report' prefix if found
+        for i, part in enumerate(parts):
+            if part.lower() == 'report' and i + 1 < len(parts):
+                return i + 1
+        
+        return 0
     
     def _aggregate_nlp_reports(self, nlp_data_list: List[Dict], report_filenames: Optional[List[str]] = None) -> Dict:
         """
@@ -476,6 +519,18 @@ class AnalysisReportGenerator:
         .chart-container {{
             margin: 30px 0;
             text-align: center;
+            transition: all 0.3s ease;
+            padding: 20px;
+            border-radius: 10px;
+            background: #16213e;
+            border: 1px solid #2d2d44;
+        }}
+        
+        .chart-container:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3);
+            border-color: #4a69bd;
+            background: #1a1a2e;
         }}
         
         .chart-container img {{
@@ -483,6 +538,11 @@ class AnalysisReportGenerator:
             height: auto;
             border-radius: 8px;
             border: 1px solid #2d2d44;
+            transition: all 0.3s ease;
+        }}
+        
+        .chart-container:hover img {{
+            border-color: #6c5ce7;
         }}
         
         .chart-grid {{

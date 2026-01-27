@@ -969,9 +969,9 @@ class AnalysisReportGenerator:
             if culture_name in by_language:
                 sentiment = topic.get('sentiment_label', 'neutral').lower()
                 # Use English name for consistency in executive summary and clean it
-                topic_name_en = topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}"))
+                topic_name = topic.get('topic_name', f"Topic {topic.get('topic_id')}")
                 topic_info = {
-                    'name': self._clean_topic_name(topic_name_en),
+                    'name': self._clean_topic_name(topic_name),
                     'density': topic.get('density', 0),
                     'score': topic.get('sentiment_score', 0),
                     'summary': topic.get('summary', '')
@@ -1145,7 +1145,7 @@ class AnalysisReportGenerator:
                 
                 if positive_topics:
                     for topic in positive_topics:
-                        topic_name = topic.get('topic_name_en', topic.get('topic_name', 'Unknown'))
+                        topic_name = topic.get('topic_name', 'Unknown')
                         density = topic.get('density', 0)
                         html += f"""
                                 <div style="background: rgba(78, 205, 196, 0.15); padding: 8px; margin: 5px 0; border-left: 2px solid #4ecdc4; border-radius: 4px;">
@@ -1167,7 +1167,7 @@ class AnalysisReportGenerator:
                 
                 if negative_topics:
                     for topic in negative_topics:
-                        topic_name = topic.get('topic_name_en', topic.get('topic_name', 'Unknown'))
+                        topic_name = topic.get('topic_name', 'Unknown')
                         density = topic.get('density', 0)
                         html += f"""
                                 <div style="background: rgba(231, 76, 60, 0.15); padding: 8px; margin: 5px 0; border-left: 2px solid #e74c3c; border-radius: 4px;">
@@ -1261,7 +1261,7 @@ class AnalysisReportGenerator:
                     culture_topics[culture]['negative'] += count
                 
                 culture_topics[culture]['topics'].append({
-                    'name': self._clean_topic_name(topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}"))),
+                    'name': self._clean_topic_name(topic.get('topic_name', f"Topic {topic.get('topic_id')}")),
                     'count': count,
                     'sentiment': sentiment
                 })
@@ -1474,15 +1474,8 @@ class AnalysisReportGenerator:
                 
                 for idx, topic in enumerate(sorted_topics, 1):
                     topic_id = topic.get('topic_id', idx)
-                    # Use English name as primary, show native name in parentheses if different
-                    topic_name_en = self._clean_topic_name(topic.get('topic_name_en', topic.get('topic_name', f'Topic {topic_id}')))
-                    topic_name_native = self._clean_topic_name(topic.get('topic_name_native', topic_name_en))
-                    
-                    # Display format: "English Name (Native Name)" if they differ
-                    if topic_name_native != topic_name_en and topic_name_native:
-                        display_name = f"{topic_name_en} ({topic_name_native})"
-                    else:
-                        display_name = topic_name_en
+                    # Use English name consistently
+                    topic_name = self._clean_topic_name(topic.get('topic_name', f'Topic {topic_id}'))
                     
                     density = topic.get('density', 0)
                     sentiment = topic.get('sentiment_label', 'neutral')
@@ -1494,7 +1487,7 @@ class AnalysisReportGenerator:
                     html += f"""
                     <div class="topic-card-hover">
                         <div class="topic-header">
-                            <div class="topic-title">{idx}. {display_name}</div>
+                            <div class="topic-title">{idx}. {topic_name}</div>
                             <div class="sentiment-badge {sentiment_class}">
                                 {sentiment_emoji} {sentiment.capitalize()} ({score:+.3f})
                             </div>

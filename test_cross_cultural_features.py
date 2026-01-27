@@ -1,6 +1,6 @@
 """
-Test script for cross-cultural analysis features
-Tests the 5 implemented requirements
+Test script for cross-cultural analysis features.
+Tests the 5 implemented requirements.
 """
 
 import sys
@@ -213,8 +213,6 @@ def test_aggregation_with_filenames():
         return True
     except Exception as e:
         print(f"❌ FAIL: Aggregation error: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 def main():

@@ -148,6 +148,10 @@ class LLMReportGenerator:
         """
         Generate a meaningful name for a topic using LLM in the ORIGINAL language
         
+        The original language is determined by analyzing the language distribution
+        in the topic's samples. The LLM then generates a topic name in that language
+        (e.g., Chinese samples → Chinese topic name).
+        
         Args:
             topic_data: Dictionary containing topic information
             

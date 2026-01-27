@@ -311,6 +311,73 @@ Answer:"""
         
         return analysis
     
+    def filter_valuable_topics(self, topics: List[Dict]) -> List[Dict]:
+        """
+        Use LLM to intelligently filter out low-value/spam topics, keeping all valuable ones
+        
+        Args:
+            topics: List of all topics from NLP analysis
+            
+        Returns:
+            List of valuable topics (no hardcoded limit)
+        """
+        if not self.llm_available or len(topics) <= 3:
+            # Without LLM or for small topic lists, use density-based filtering
+            # Keep topics with density > 5 players or top 80% by density
+            sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
+            threshold = max(5, sorted_topics[int(len(sorted_topics) * 0.2)].get('density', 0) if sorted_topics else 5)
+            return [t for t in topics if t.get('density', 0) >= threshold]
+        
+        try:
+            # Prepare topic summaries for LLM evaluation
+            topic_info = []
+            for i, topic in enumerate(topics):
+                sentences = topic.get('representative_sentences', [])[:2]
+                density = topic.get('density', 0)
+                sentiment = topic.get('sentiment_label', 'neutral')
+                
+                topic_info.append(f"""Topic {i+1}:
+- Players: {density}
+- Sentiment: {sentiment}
+- Sample: {sentences[0] if sentences else 'N/A'}""")
+            
+            prompt = f"""Evaluate these {len(topics)} game feedback topics and identify which are VALUABLE vs LOW-VALUE.
+
+VALUABLE topics discuss: gameplay features, graphics, music, story, bugs, balancing, UI/UX, content, multiplayer.
+LOW-VALUE topics: spam, off-topic, generic praise/complaints without substance, repetitive filler.
+
+{chr(10).join(topic_info)}
+
+List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10,12"):"""
+            
+            response = self._query_llm(prompt, max_tokens=100)
+            
+            # Parse response to extract topic indices
+            import re
+            numbers = re.findall(r'\d+', response)
+            valuable_indices = {int(n) - 1 for n in numbers if n.isdigit() and 0 < int(n) <= len(topics)}
+            
+            if valuable_indices:
+                filtered = [topics[i] for i in sorted(valuable_indices) if i < len(topics)]
+                print(f"✅ LLM filtered {len(topics)} topics → {len(filtered)} valuable topics")
+                return filtered
+            else:
+                # Fallback if parsing fails
+                print("⚠️ LLM filtering failed, using density-based filtering")
+                return self._filter_by_density(topics)
+                
+        except Exception as e:
+            print(f"⚠️ LLM filtering error: {e}, using fallback")
+            return self._filter_by_density(topics)
+    
+    def _filter_by_density(self, topics: List[Dict]) -> List[Dict]:
+        """Fallback: Filter topics by density (keep top 80% or min 5 players)"""
+        sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
+        threshold = max(5, sorted_topics[int(len(sorted_topics) * 0.2)].get('density', 0) if len(sorted_topics) > 5 else 5)
+        filtered = [t for t in topics if t.get('density', 0) >= threshold]
+        print(f"📊 Density-based filtering: {len(topics)} topics → {len(filtered)} topics (threshold: {threshold} players)")
+        return filtered
+
     def generate_enhanced_report(self, nlp_result: Dict, include_charts: bool = True, include_cultural_analysis: bool = True) -> Dict:
         """
         Generate an enhanced report with LLM-generated topic names, insights, and cross-cultural analysis
@@ -323,9 +390,15 @@ Answer:"""
         Returns:
             Enhanced report dictionary with topic names, summaries, cultural insights, and chart data
         """
+        # Step 1: Filter topics using LLM (removes hardcoded 5-topic limit)
+        all_topics = nlp_result.get('topics', [])
+        valuable_topics = self.filter_valuable_topics(all_topics)
+        
+        print(f"📝 Processing {len(valuable_topics)} valuable topics (from {len(all_topics)} total)")
+        
         enhanced_topics = []
         
-        for topic in nlp_result.get('topics', []):
+        for topic in valuable_topics:
             # Generate topic name using LLM
             topic_name = self.generate_topic_name(topic)
             
@@ -351,7 +424,9 @@ Answer:"""
             'statistics': nlp_result.get('statistics', {}),
             'topics': enhanced_topics,
             'llm_enhanced': self.llm_available,
-            'cross_cultural': include_cultural_analysis
+            'cross_cultural': include_cultural_analysis,
+            'total_topics_analyzed': len(all_topics),
+            'valuable_topics_count': len(valuable_topics)
         }
         
         # Add chart data if requested

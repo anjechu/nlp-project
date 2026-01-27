@@ -6,9 +6,11 @@ Creates visual charts from analysis data
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for server use
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import numpy as np
 from typing import Dict, List
 import os
+import warnings
 
 class ReportChartGenerator:
     """Generates charts and visualizations for enhanced reports"""
@@ -24,6 +26,9 @@ class ReportChartGenerator:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
+        # Configure fonts for CJK (Chinese/Japanese/Korean) character support
+        self._configure_cjk_fonts()
+        
         # Set style for modern dark theme
         plt.style.use('dark_background')
         self.colors = {
@@ -32,6 +37,32 @@ class ReportChartGenerator:
             'negative': '#e74c3c',   # Red
             'accent': '#2ecc71'      # Green
         }
+    
+    def _configure_cjk_fonts(self):
+        """Configure matplotlib to support CJK characters"""
+        # Try to find suitable CJK fonts
+        cjk_fonts = []
+        for font in fm.fontManager.ttflist:
+            font_name_lower = font.name.lower()
+            # Look for common CJK font families
+            if any(cjk in font_name_lower for cjk in [
+                'noto', 'droid', 'wqy', 'source han', 'microsoft yahei', 
+                'simhei', 'simsun', 'meiryo', 'yu gothic', 'malgun'
+            ]):
+                cjk_fonts.append(font.name)
+        
+        if cjk_fonts:
+            # Use the first available CJK font
+            plt.rcParams['font.sans-serif'] = [cjk_fonts[0]] + plt.rcParams['font.sans-serif']
+            print(f"✅ Using CJK font: {cjk_fonts[0]}")
+        else:
+            # Fallback: use DejaVu Sans and suppress warnings
+            print("⚠️ No CJK fonts found, using fallback (some characters may not display)")
+            warnings.filterwarnings('ignore', category=UserWarning, message='.*Glyph.*missing.*')
+        
+        # Set font fallback chain to handle missing glyphs gracefully
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['axes.unicode_minus'] = False  # Fix minus sign display
     
     def generate_sentiment_pie_chart(self, sentiment_dist: Dict, output_name: str = "sentiment_dist.png") -> str:
         """

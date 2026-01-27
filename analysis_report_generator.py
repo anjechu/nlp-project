@@ -24,12 +24,12 @@ class AnalysisReportGenerator:
         self.llm_generator = llm_generator
         self.chart_generator = chart_generator
     
-    def generate_analysis_report(self, nlp_data: Dict, output_dir: str = "analysis") -> str:
+    def generate_analysis_report(self, nlp_data_list: List[Dict], output_dir: str = "analysis") -> str:
         """
-        Generate a complete cross-cultural analysis report
+        Generate a complete cross-cultural analysis report from multiple NLP reports
         
         Args:
-            nlp_data: Original NLP processing result (untouched)
+            nlp_data_list: List of NLP processing results to aggregate (can be single or multiple reports)
             output_dir: Directory to save analysis reports
             
         Returns:
@@ -38,30 +38,93 @@ class AnalysisReportGenerator:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
+        # Handle both single dict and list of dicts
+        if isinstance(nlp_data_list, dict):
+            nlp_data_list = [nlp_data_list]
+        
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_name = f"analysis_{timestamp}"
         
-        # Step 1: Enhance with LLM (topic naming, summaries, cultural analysis)
-        enhanced_data = self._enhance_with_llm(nlp_data)
+        print(f"🌏 Aggregating {len(nlp_data_list)} reports into unified cross-cultural analysis...")
         
-        # Step 2: Generate charts and get base64 encoded images
+        # Step 1: Aggregate all NLP data into one comprehensive dataset
+        aggregated_data = self._aggregate_nlp_reports(nlp_data_list)
+        
+        # Step 2: Enhance with LLM (topic naming, summaries, cultural analysis)
+        enhanced_data = self._enhance_with_llm(aggregated_data)
+        
+        # Step 3: Generate charts and get base64 encoded images
         chart_images = self._generate_chart_images(enhanced_data, base_name, output_dir)
         
-        # Step 3: Generate HTML report
-        html_content = self._generate_html_report(enhanced_data, chart_images, nlp_data)
+        # Step 4: Generate HTML report
+        html_content = self._generate_html_report(enhanced_data, chart_images, aggregated_data)
         
-        # Step 4: Save report
+        # Step 5: Save report
         html_path = os.path.join(output_dir, f"{base_name}.html")
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        # Step 5: Save enhanced JSON for reference
+        # Step 6: Save enhanced JSON for reference
         json_path = os.path.join(output_dir, f"{base_name}.json")
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(enhanced_data, f, ensure_ascii=False, indent=2)
         
+        print(f"✅ Unified analysis report generated: {html_path}")
         return html_path
+    
+    def _aggregate_nlp_reports(self, nlp_data_list: List[Dict]) -> Dict:
+        """
+        Aggregate multiple NLP reports into one comprehensive dataset
+        
+        Args:
+            nlp_data_list: List of NLP processing results
+            
+        Returns:
+            Single aggregated NLP data dictionary
+        """
+        if len(nlp_data_list) == 1:
+            return nlp_data_list[0]
+        
+        print(f"📊 Aggregating topics from {len(nlp_data_list)} reports...")
+        
+        # Aggregate statistics
+        total_stats = {
+            'total_comments': 0,
+            'total_valid': 0,
+            'report_count': len(nlp_data_list),
+            'source_reports': []
+        }
+        
+        # Collect all topics from all reports
+        all_topics = []
+        topic_id_counter = 1
+        
+        for report_idx, nlp_data in enumerate(nlp_data_list, 1):
+            stats = nlp_data.get('statistics', {})
+            total_stats['total_comments'] += stats.get('total', 0)
+            total_stats['total_valid'] += stats.get('valid', 0)
+            total_stats['source_reports'].append(f"Report {report_idx}")
+            
+            # Add topics with updated IDs
+            for topic in nlp_data.get('topics', []):
+                aggregated_topic = {
+                    **topic,
+                    'topic_id': topic_id_counter,
+                    'source_report': report_idx
+                }
+                all_topics.append(aggregated_topic)
+                topic_id_counter += 1
+        
+        aggregated = {
+            'statistics': total_stats,
+            'topics': all_topics,
+            'aggregated': True,
+            'source_count': len(nlp_data_list)
+        }
+        
+        print(f"✅ Aggregated {len(all_topics)} total topics from {len(nlp_data_list)} reports")
+        return aggregated
     
     def _enhance_with_llm(self, nlp_data: Dict) -> Dict:
         """Enhance NLP data with LLM insights"""
@@ -426,8 +489,10 @@ class AnalysisReportGenerator:
     
     def _generate_executive_summary(self, stats: Dict, topics: List[Dict], cultural_summary: str, is_llm: bool) -> str:
         """Generate executive summary section"""
-        total = stats.get('total', 0)
-        valid = stats.get('valid', total)
+        total = stats.get('total_comments', stats.get('total', 0))
+        valid = stats.get('total_valid', stats.get('valid', total))
+        report_count = stats.get('report_count', 1)
+        is_aggregated = stats.get('report_count', 0) > 1
         
         # Calculate sentiment distribution
         positive_count = sum(1 for t in topics if t.get('sentiment_label', '').lower() == 'positive')
@@ -445,7 +510,21 @@ class AnalysisReportGenerator:
         html = """
             <div class="section">
                 <h2>📊 Executive Summary</h2>
-                
+"""
+        
+        # Add aggregation notice if multiple reports
+        if is_aggregated:
+            html += f"""
+                <div style="background: #2d2d44; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #6c5ce7;">
+                    <strong>🌍 Multi-Game Aggregated Analysis</strong>
+                    <p style="margin-top: 8px; color: #d0d0d0;">
+                        This report synthesizes insights from <strong>{report_count} different game reports</strong> 
+                        into a unified cross-cultural analysis, showing patterns across all games and all languages.
+                    </p>
+                </div>
+"""
+        
+        html += """
                 <div class="stats-grid">
 """
         
@@ -454,6 +533,17 @@ class AnalysisReportGenerator:
                         <span class="value">{total}</span>
                         <span class="label">Total Reviews</span>
                     </div>
+"""
+        
+        if is_aggregated:
+            html += f"""
+                    <div class="stat-card">
+                        <span class="value">{report_count}</span>
+                        <span class="label">Games Analyzed</span>
+                    </div>
+"""
+        
+        html += f"""
                     <div class="stat-card">
                         <span class="value">{len(topics)}</span>
                         <span class="label">Topics Identified</span>

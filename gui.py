@@ -469,51 +469,62 @@ class NLPApp(ctk.CTk):
         threading.Thread(target=self._run_analysis_generation, daemon=True).start()
     
     def _run_analysis_generation(self):
-        """Background task to generate analysis reports"""
+        """Background task to generate ONE aggregated analysis report from ALL loaded reports"""
         try:
-            generated_count = 0
-            total = len(self.loaded_reports)
-            generated_paths = []
+            # Collect all NLP data
+            all_reports = list(self.loaded_reports.values())
+            report_names = list(self.loaded_reports.keys())
             
-            for idx, (name, nlp_data) in enumerate(list(self.loaded_reports.items()), 1):
-                # Use thread-safe method to update GUI from background thread
-                self.after(0, lambda n=name, i=idx, t=total: 
-                    self.llm_status_label.configure(text=f"Analyzing {i}/{t}: {n[:30]}..."))
-                
-                # Generate comprehensive analysis report (keeps NLP data untouched)
-                html_path = self.analysis_report_generator.generate_analysis_report(nlp_data, output_dir="analysis")
-                
-                generated_paths.append(html_path)
-                generated_count += 1
-                
-                self.log(f"🌏 Cross-cultural analysis generated: {html_path}")
+            if not all_reports:
+                self.after(0, lambda: tkinter.messagebox.showwarning(
+                    "No Reports", 
+                    "Please load or generate NLP reports first before creating analysis."
+                ))
+                return
+            
+            # Update status
+            self.after(0, lambda: 
+                self.llm_status_label.configure(
+                    text=f"Aggregating {len(all_reports)} reports into unified analysis..."
+                ))
+            
+            # Generate ONE comprehensive cross-cultural analysis from ALL reports
+            html_path = self.analysis_report_generator.generate_analysis_report(
+                all_reports,  # Pass all reports as a list
+                output_dir="analysis"
+            )
+            
+            self.log(f"🌏 Unified cross-cultural analysis generated: {html_path}")
+            self.log(f"📊 Analyzed {len(all_reports)} reports: {', '.join(report_names[:3])}{'...' if len(report_names) > 3 else ''}")
             
             # Update display (show original NLP data, not modified)
             self.after(0, self.display_report_summary)
-            self.after(0, lambda: self.llm_status_label.configure(text=f"Generated {generated_count} analysis reports"))
+            self.after(0, lambda: self.llm_status_label.configure(
+                text=f"Analysis complete: {len(all_reports)} reports aggregated"
+            ))
             
-            # Show completion message with file locations
-            paths_list = '\n'.join([f"  • {os.path.basename(p)}" for p in generated_paths[:5]])
-            if len(generated_paths) > 5:
-                paths_list += f"\n  ... and {len(generated_paths) - 5} more"
-            
-            message = f"Successfully generated {generated_count} cross-cultural analysis reports!\n\n"
-            message += "📁 Analysis reports (HTML): analysis/\n"
+            # Show completion message
+            message = f"Successfully generated unified cross-cultural analysis!\n\n"
+            message += f"📊 Reports Analyzed: {len(all_reports)}\n"
+            message += f"   {', '.join(name[:30] for name in report_names[:5])}\n"
+            if len(report_names) > 5:
+                message += f"   ... and {len(report_names) - 5} more\n"
+            message += "\n"
+            message += f"📁 Analysis report (HTML): {os.path.basename(html_path)}\n"
             message += "📊 Chart images: analysis/*.png\n"
             message += "📄 Analysis data (JSON): analysis/*.json\n\n"
-            message += "Generated files:\n" + paths_list + "\n\n"
-            message += "⚠️ Note: Original NLP reports in 'reports/' folder remain untouched."
+            message += "⚠️ Note: Original NLP reports in 'reports/' folder remain untouched.\n"
+            message += "         All reports have been aggregated into ONE comprehensive analysis."
             
             self.after(0, lambda: tkinter.messagebox.showinfo("Analysis Complete", message))
             
-            # Offer to open the first analysis report
-            if generated_paths:
-                import webbrowser
-                try:
-                    webbrowser.open('file://' + os.path.abspath(generated_paths[0]))
-                    self.log(f"📖 Opened analysis report in browser")
-                except Exception as e:
-                    self.log(f"⚠️ Could not open browser: {e}")
+            # Open the analysis report in browser
+            import webbrowser
+            try:
+                webbrowser.open('file://' + os.path.abspath(html_path))
+                self.log(f"📖 Opened analysis report in browser")
+            except Exception as e:
+                self.log(f"⚠️ Could not open browser: {e}")
             
         except Exception as e:
             self.log(f"❌ Analysis Generation Error: {str(e)}")

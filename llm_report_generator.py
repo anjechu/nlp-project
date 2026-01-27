@@ -208,7 +208,8 @@ English topic name:"""
             if any(ord(c) > 127 for c in topic_name):
                 # Contains non-Latin characters, use fallback
                 print(f"⚠️ Non-English topic name detected: {topic_name}, using fallback")
-                topic_name = self._extract_keywords(sentences)
+                topic_id = topic_data.get('topic_id')
+                topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
             # Check for overly generic names and force re-extraction
             generic_names = {
@@ -217,24 +218,36 @@ English topic name:"""
             }
             if topic_name.lower() in generic_names:
                 print(f"⚠️ Generic topic name detected: {topic_name}, extracting specific keywords")
-                topic_name = self._extract_keywords(sentences)
+                topic_id = topic_data.get('topic_id')
+                topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
             # Fallback if response is too long or invalid
             if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH or len(topic_name) < 2:
-                topic_name = self._extract_keywords(sentences)
+                topic_id = topic_data.get('topic_id')
+                topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
             return topic_name
             
         except Exception as e:
             print(f"⚠️ Error generating topic name: {e}")
-            topic_id = topic_data.get('topic_id', 'Unknown')
-            return f"Topic {topic_id}"
+            # Extract keywords from sentences as fallback
+            try:
+                topic_id = topic_data.get('topic_id')
+                return self._extract_keywords(sentences, topic_id=topic_id)
+            except:
+                # If everything fails, use topic ID
+                topic_id = topic_data.get('topic_id', 'Unknown')
+                return f"Topic {topic_id}"
     
-    def _extract_keywords(self, sentences: List[str]) -> str:
+    def _extract_keywords(self, sentences: List[str], topic_id: str = None) -> str:
         """
         Fallback method to extract English keywords if LLM fails.
         Only uses Latin characters to ensure English output.
         Tries to extract meaningful, specific keywords from the content.
+        
+        Args:
+            sentences: List of sentences to extract keywords from
+            topic_id: Optional topic ID to use as final fallback
         """
         # Simple keyword extraction based on frequency
         words = []
@@ -243,7 +256,7 @@ English topic name:"""
             for word in s.split():
                 # Only keep words that are mostly Latin characters (English)
                 latin_chars = sum(1 for c in word if ord(c) < 128)
-                if latin_chars > len(word) * 0.8 and len(word) > 2:  # 80% Latin chars and length > 2
+                if latin_chars > len(word) * 0.7 and len(word) > 2:  # 70% Latin chars and length > 2
                     # Clean punctuation
                     word_clean = word.strip('.,!?;:()[]{}"\'-').lower()
                     if len(word_clean) > 2:
@@ -332,8 +345,10 @@ English topic name:"""
             if unique_potential:
                 return ' '.join(unique_potential[:2])
         
-        # Absolute last resort - use topic ID based name
-        return f"Topic {topic_data.get('topic_id', 'Unknown')}"
+        # Absolute last resort - use topic ID based name if provided
+        if topic_id:
+            return f"Topic {topic_id}"
+        return "Unidentified Topic"
     
     def generate_topic_summary(self, topic_data: Dict, topic_name: str) -> str:
         """

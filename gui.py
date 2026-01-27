@@ -16,6 +16,14 @@ except ImportError:
     tkinter.messagebox.showerror("Error", "Cannot find nlp.py file!")
     sys.exit(1)
 
+# Import LLM report generator
+try:
+    from llm_report_generator import LLMReportGenerator
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+    print("⚠️ LLM Report Generator not available")
+
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -44,7 +52,17 @@ class NLPApp(ctk.CTk):
         
         # Store multiple loaded reports as a dictionary mapping filename to parsed JSON data
         # Used to cache analysis results for multi-game comparison in LLM tab
-        self.loaded_reports = {} 
+        self.loaded_reports = {}
+        
+        # Initialize LLM report generator if available
+        self.llm_generator = None
+        if LLM_AVAILABLE:
+            try:
+                self.llm_generator = LLMReportGenerator()
+                print("✅ LLM Report Generator initialized")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize LLM: {e}")
+                self.llm_generator = None
 
         self._init_ui()
 
@@ -125,9 +143,37 @@ class NLPApp(ctk.CTk):
         self.log(f"Current Compute Device: {nlp.GLOBAL_DEVICE}")
 
     def _setup_report_tab(self):
-        self.report_box = ctk.CTkTextbox(self.tab_report, font=("Consolas", 12), 
+        # Create frame for controls
+        control_frame = ctk.CTkFrame(self.tab_report, fg_color=THEME_DARK_BG, 
+                                      corner_radius=8, border_width=1, border_color=THEME_BORDER)
+        control_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Add button to enhance reports with LLM
+        self.btn_enhance_llm = ctk.CTkButton(
+            control_frame,
+            text="✨ Enhance with LLM (Generate Topic Names & Insights)",
+            command=self.enhance_reports_with_llm,
+            fg_color=THEME_ACCENT_VIOLET,
+            hover_color=THEME_ACCENT_VIOLET_HOVER,
+            corner_radius=6,
+            font=("Segoe UI", 11, "bold"),
+            state="disabled" if not LLM_AVAILABLE else "normal"
+        )
+        self.btn_enhance_llm.pack(side="left", padx=10, pady=8)
+        
+        # Status label for LLM enhancement
+        self.llm_status_label = ctk.CTkLabel(
+            control_frame,
+            text="LLM Ready" if LLM_AVAILABLE else "LLM Not Available",
+            text_color=THEME_ACCENT_VIOLET if LLM_AVAILABLE else THEME_TEXT_MUTED,
+            font=("Segoe UI", 10)
+        )
+        self.llm_status_label.pack(side="left", padx=10)
+        
+        # Report display
+        self.report_box = ctk.CTkTextbox(self.tab_report, font=("Consolas", 11), 
                                           fg_color=THEME_DARK_BG, border_width=1, border_color=THEME_BORDER,
-                                          corner_radius=8, text_color=THEME_TEXT_SECONDARY)
+                                          corner_radius=8, text_color=THEME_TEXT_SECONDARY, wrap="word")
         self.report_box.pack(fill="both", expand=True, padx=10, pady=10)
         self.report_box.insert("0.0", "Please load data first...")
 
@@ -276,20 +322,120 @@ class NLPApp(ctk.CTk):
             return
 
         text = f"📚 Current Analysis Pool ({len(self.loaded_reports)} game datasets):\n"
-        text += "="*60 + "\n\n"
+        text += "="*80 + "\n\n"
         
         for name, data in self.loaded_reports.items():
             total_reviews = data['statistics']['total']
-            # Display the hottest topic
-            top_topic = data['topics'][0] if data['topics'] else None
-            top_sent = top_topic['representative_sentences'][0][:50] + "..." if top_topic else "No data"
+            valid_reviews = data['statistics'].get('valid', total_reviews)
+            topics = data.get('topics', [])
+            is_enhanced = data.get('llm_enhanced', False)
             
-            text += f"🎮 File: {name}\n"
-            text += f"   - Review Count: {total_reviews}\n"
-            text += f"   - Top Topic ({top_topic['sentiment_label']}): {top_sent}\n"
-            text += "-"*40 + "\n"
+            text += f"🎮 FILE: {name}\n"
+            text += f"{'─'*80}\n"
+            text += f"📊 Review Count: {total_reviews} total | {valid_reviews} analyzed\n"
+            text += f"🏷️  Topics Found: {len(topics)}\n"
+            text += f"{'✨ LLM Enhanced' if is_enhanced else '📝 Basic Analysis'}\n\n"
+            
+            # Display top 5 topics with enhanced formatting
+            for idx, topic in enumerate(topics[:5], 1):
+                topic_id = topic.get('topic_id', idx)
+                density = topic.get('density', 0)
+                sentiment = topic.get('sentiment_label', 'neutral')
+                score = topic.get('sentiment_score', 0)
+                topic_name = topic.get('topic_name', f'Topic {topic_id}')
+                
+                # Sentiment emoji
+                sentiment_emoji = {'positive': '😊', 'negative': '😞', 'neutral': '😐'}
+                emoji = sentiment_emoji.get(sentiment.lower(), '😐')
+                
+                text += f"  {idx}. 📌 {topic_name.upper()}\n"
+                text += f"     {emoji} Sentiment: {sentiment.capitalize()} ({score:+.3f})\n"
+                text += f"     👥 Mentions: {density} players\n"
+                
+                # Show LLM summary if available
+                if 'summary' in topic:
+                    summary = topic['summary'][:150]
+                    text += f"     💡 Insight: {summary}{'...' if len(topic['summary']) > 150 else ''}\n"
+                
+                # Show representative sentence
+                rep_sentences = topic.get('representative_sentences', [])
+                if rep_sentences:
+                    text += f"     💬 Example: \"{rep_sentences[0][:80]}{'...' if len(rep_sentences[0]) > 80 else ''}\"\n"
+                
+                text += "\n"
+            
+            # Show charts data if available
+            if 'charts' in data:
+                charts = data['charts']
+                if 'sentiment_distribution' in charts:
+                    dist = charts['sentiment_distribution']
+                    text += f"  📊 SENTIMENT OVERVIEW:\n"
+                    text += f"     😊 Positive: {dist.get('positive', 0)} | "
+                    text += f"😐 Neutral: {dist.get('neutral', 0)} | "
+                    text += f"😞 Negative: {dist.get('negative', 0)}\n"
+                
+                if 'sentiment_score_stats' in charts:
+                    stats = charts['sentiment_score_stats']
+                    text += f"     Average Score: {stats.get('mean', 0):.3f} "
+                    text += f"(σ={stats.get('std', 0):.3f})\n"
+            
+            text += f"\n{'─'*80}\n\n"
             
         self.report_box.insert("0.0", text)
+    
+    def enhance_reports_with_llm(self):
+        """Enhance all loaded reports with LLM-generated topic names and insights"""
+        if not self.llm_generator:
+            tkinter.messagebox.showwarning("LLM Not Available", 
+                                            "LLM report generator is not initialized. Please check your setup.")
+            return
+        
+        if not self.loaded_reports:
+            tkinter.messagebox.showwarning("No Data", 
+                                            "Please load or generate reports first before enhancing with LLM.")
+            return
+        
+        # Run enhancement in background thread
+        self.btn_enhance_llm.configure(state="disabled")
+        self.llm_status_label.configure(text="Enhancing reports with LLM...")
+        threading.Thread(target=self._run_llm_enhancement, daemon=True).start()
+    
+    def _run_llm_enhancement(self):
+        """Background task to enhance reports with LLM"""
+        try:
+            enhanced_count = 0
+            total = len(self.loaded_reports)
+            
+            for idx, (name, data) in enumerate(list(self.loaded_reports.items()), 1):
+                self.llm_status_label.configure(
+                    text=f"Enhancing {idx}/{total}: {name[:30]}..."
+                )
+                self.update_idletasks()
+                
+                # Generate enhanced report
+                enhanced_data = self.llm_generator.generate_enhanced_report(data, include_charts=True)
+                
+                # Update the loaded report
+                self.loaded_reports[name] = enhanced_data
+                enhanced_count += 1
+                
+                self.log(f"✨ Enhanced report: {name}")
+            
+            # Update display
+            self.display_report_summary()
+            self.llm_status_label.configure(text=f"Enhanced {enhanced_count} reports")
+            
+            tkinter.messagebox.showinfo("Enhancement Complete", 
+                                         f"Successfully enhanced {enhanced_count} reports with LLM-generated insights!")
+            
+        except Exception as e:
+            self.log(f"❌ LLM Enhancement Error: {str(e)}")
+            tkinter.messagebox.showerror("Enhancement Failed", 
+                                          f"Failed to enhance reports: {str(e)}")
+            self.llm_status_label.configure(text="Enhancement failed")
+        
+        finally:
+            self.btn_enhance_llm.configure(state="normal")
 
     def generate_prompt_logic(self):
         """

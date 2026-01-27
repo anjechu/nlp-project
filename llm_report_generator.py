@@ -635,6 +635,9 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10")
                 'summary': summary
             }
             
+            # Debug: Verify the topic_name is correctly set in the dict
+            print(f"   📝 Topic dict has topic_name: '{enhanced_topic.get('topic_name')}' (should be: '{topic_name}')")
+            
             # Add cross-cultural analysis if requested
             if include_cultural_analysis:
                 cultural_analysis = self.analyze_cross_cultural_preferences(topic, topic_name)

@@ -206,10 +206,25 @@ English topic name:"""
             
             # Check if it's actually English (basic check for non-Latin characters)
             if any(ord(c) > 127 for c in topic_name):
-                # Contains non-Latin characters, use fallback
-                print(f"⚠️ Non-English topic name detected: {topic_name}, using fallback")
+                # Contains non-Latin characters, try to extract English parts from the response first
+                print(f"⚠️ Non-English topic name detected: {topic_name}, extracting English parts")
                 topic_id = topic_data.get('topic_id')
-                topic_name = self._extract_keywords(sentences, topic_id=topic_id)
+                # First try to extract English words from the LLM's mixed-language response
+                english_words = []
+                for word in topic_name.split():
+                    # Remove punctuation and check if mostly Latin
+                    word_clean = word.strip('.,!?;:()[]{}"\'-：')
+                    latin_chars = sum(1 for c in word_clean if ord(c) < 128)
+                    if word_clean and latin_chars > len(word_clean) * 0.8:  # Mostly English
+                        english_words.append(word_clean)
+                
+                if len(english_words) >= 1:
+                    # Use extracted English words from LLM response
+                    topic_name = ' '.join(english_words[:3])  # Take up to 3 words
+                    print(f"   → Extracted English parts: {topic_name}")
+                else:
+                    # If no English in LLM response, extract from sentences
+                    topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
             # Check for overly generic names and force re-extraction
             generic_names = {

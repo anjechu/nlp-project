@@ -205,6 +205,7 @@ English topic name:"""
                 topic_name = topic_name.split(':', 1)[1].strip()
             
             # Check if it's actually English (basic check for non-Latin characters)
+            used_translation = False  # Track if we successfully used translation
             if any(ord(c) > 127 for c in topic_name):
                 # Contains non-Latin characters, try to extract English parts from the response first
                 print(f"⚠️ Non-English topic name detected: {topic_name}, extracting English parts")
@@ -237,31 +238,36 @@ Provide ONLY the English translation, nothing else. Use specific terminology rel
                         translated_name = translated_name.strip('"\'•–—: ').strip('-').strip('0123456789. ')
                         
                         # Verify translation is actually English
-                        if translated_name and not any(ord(c) > 127 for c in translated_name):
+                        if translated_name and not any(ord(c) > 127 for c in translated_name) and len(translated_name) >= 2:
                             topic_name = translated_name
+                            used_translation = True  # Mark that we successfully used translation
                             print(f"   → LLM translated to: {topic_name}")
                         else:
                             # Translation failed or still contains non-English, extract from sentences
+                            print(f"   → Translation invalid, using keyword extraction")
                             topic_name = self._extract_keywords(sentences, topic_id=topic_id)
                     except Exception as trans_error:
                         print(f"   → Translation failed: {trans_error}, using keyword extraction")
                         topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
-            # Check for overly generic names and force re-extraction
-            generic_names = {
-                'player feedback', 'game feedback', 'user feedback', 'general feedback',
-                'player opinion', 'game opinion', 'user opinion', 'general opinion'
-            }
-            if topic_name.lower() in generic_names:
-                print(f"⚠️ Generic topic name detected: {topic_name}, extracting specific keywords")
-                topic_id = topic_data.get('topic_id')
-                topic_name = self._extract_keywords(sentences, topic_id=topic_id)
+            # Check for overly generic names and force re-extraction (unless we used translation)
+            if not used_translation:
+                generic_names = {
+                    'player feedback', 'game feedback', 'user feedback', 'general feedback',
+                    'player opinion', 'game opinion', 'user opinion', 'general opinion'
+                }
+                if topic_name.lower() in generic_names:
+                    print(f"⚠️ Generic topic name detected: {topic_name}, extracting specific keywords")
+                    topic_id = topic_data.get('topic_id')
+                    topic_name = self._extract_keywords(sentences, topic_id=topic_id)
+                
+                # Fallback if response is too long or invalid
+                if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH or len(topic_name) < 2:
+                    print(f"⚠️ Topic name length invalid ({len(topic_name)} chars): '{topic_name}', using keyword extraction")
+                    topic_id = topic_data.get('topic_id')
+                    topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
-            # Fallback if response is too long or invalid
-            if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH or len(topic_name) < 2:
-                topic_id = topic_data.get('topic_id')
-                topic_name = self._extract_keywords(sentences, topic_id=topic_id)
-            
+            print(f"✅ Final topic name: {topic_name}")
             return topic_name
             
         except Exception as e:

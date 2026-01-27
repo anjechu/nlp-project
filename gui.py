@@ -60,11 +60,17 @@ class NLPApp(ctk.CTk):
         if LLM_AVAILABLE:
             try:
                 # Try Ollama first (easier for local setup)
-                self.llm_generator = LLMReportGenerator(use_ollama=True, ollama_model="qwen:7b")
-                if self.llm_generator.llm_available:
-                    self.use_ollama = True
-                    print("✅ LLM Report Generator initialized (Ollama)")
-                else:
+                import requests
+                try:
+                    response = requests.get('http://localhost:11434/api/tags', timeout=2)
+                    if response.status_code == 200:
+                        # Ollama is available
+                        self.llm_generator = LLMReportGenerator(use_ollama=True, ollama_model="qwen:7b")
+                        self.use_ollama = True
+                        print("✅ LLM Report Generator initialized (Ollama)")
+                    else:
+                        raise Exception("Ollama not responding")
+                except:
                     # Fallback to HuggingFace
                     self.llm_generator = LLMReportGenerator(use_ollama=False)
                     print("✅ LLM Report Generator initialized (HuggingFace)")

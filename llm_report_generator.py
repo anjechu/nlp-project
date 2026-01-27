@@ -11,6 +11,15 @@ import numpy as np
 class LLMReportGenerator:
     """Generates enhanced reports using local LLM (Qwen) for topic naming and cross-cultural insights"""
     
+    # Language code mapping (used across the class)
+    LANG_MAP = {
+        'schinese': 'Chinese',
+        'tchinese': 'Chinese',
+        'japanese': 'Japanese',
+        'english': 'English',
+        'korean': 'Korean'
+    }
+    
     def __init__(self, model_path: Optional[str] = None, use_ollama: bool = False, ollama_model: str = "qwen:7b"):
         """
         Initialize the LLM report generator
@@ -101,21 +110,25 @@ class LLMReportGenerator:
     
     def _query_llm(self, prompt: str, max_tokens: int = 100) -> str:
         """Query LLM (Ollama or HuggingFace)"""
-        if self.use_ollama:
-            return self._query_ollama(prompt, max_tokens)
-        else:
-            # HuggingFace transformers
-            inputs = self.tokenizer(prompt, return_tensors="pt")
-            outputs = self.model.generate(
-                inputs.input_ids,
-                max_new_tokens=max_tokens,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=self.tokenizer.pad_token_id
-            )
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            # Extract the response part (after the prompt)
-            return response[len(prompt):].strip()
+        try:
+            if self.use_ollama:
+                return self._query_ollama(prompt, max_tokens)
+            else:
+                # HuggingFace transformers
+                inputs = self.tokenizer(prompt, return_tensors="pt")
+                outputs = self.model.generate(
+                    inputs.input_ids,
+                    max_new_tokens=max_tokens,
+                    temperature=0.7,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.pad_token_id
+                )
+                response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+                # Extract the response part (after the prompt)
+                return response[len(prompt):].strip()
+        except Exception as e:
+            print(f"⚠️ LLM query failed: {e}")
+            return ""
     
     def generate_topic_name(self, topic_data: Dict) -> str:
         """
@@ -254,18 +267,9 @@ Provide a concise insight summary (2-3 sentences):"""
         """
         cultural_dist = topic_data.get('cultural_distribution', {})
         
-        # Map language codes to readable names
-        lang_map = {
-            'schinese': 'Chinese',
-            'tchinese': 'Chinese',
-            'japanese': 'Japanese',
-            'english': 'English',
-            'korean': 'Korean'
-        }
-        
         # Basic analysis without LLM
         analysis = {
-            'distribution': {lang_map.get(lang, lang.capitalize()): count 
+            'distribution': {self.LANG_MAP.get(lang, lang.capitalize()): count 
                            for lang, count in cultural_dist.items()},
             'dominant_culture': None,
             'cultural_insights': {}
@@ -273,7 +277,7 @@ Provide a concise insight summary (2-3 sentences):"""
         
         if cultural_dist:
             dominant_lang = max(cultural_dist.items(), key=lambda x: x[1])[0]
-            analysis['dominant_culture'] = lang_map.get(dominant_lang, dominant_lang.capitalize())
+            analysis['dominant_culture'] = self.LANG_MAP.get(dominant_lang, dominant_lang.capitalize())
         
         # If LLM available, generate deeper insights
         if self.llm_available and len(cultural_dist) > 1:
@@ -286,7 +290,7 @@ Provide a concise insight summary (2-3 sentences):"""
                 prompt = f"""Analyze this game feedback topic "{topic_name}" from a cross-cultural perspective:
 
 Cultural Distribution:
-{chr(10).join(f'- {lang_map.get(lang, lang)}: {count} players' for lang, count in cultural_dist.items())}
+{chr(10).join(f'- {self.LANG_MAP.get(lang, lang)}: {count} players' for lang, count in cultural_dist.items())}
 
 Sample Feedback (mixed languages):
 {chr(10).join(f'- {s}' for s in samples[:5])}
@@ -373,16 +377,8 @@ Answer:"""
                 for lang, count in dist.items():
                     all_cultures[lang] = all_cultures.get(lang, 0) + count
             
-            # Map to readable names
-            lang_map = {
-                'schinese': 'Chinese',
-                'tchinese': 'Chinese', 
-                'japanese': 'Japanese',
-                'english': 'English',
-                'korean': 'Korean'
-            }
-            
-            cultural_summary = {lang_map.get(lang, lang.capitalize()): count 
+            # Map to readable names using class constant
+            cultural_summary = {self.LANG_MAP.get(lang, lang.capitalize()): count 
                               for lang, count in all_cultures.items()}
             
             # Get top positive and negative topics

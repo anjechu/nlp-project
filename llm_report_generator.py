@@ -467,32 +467,40 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10,1
             negative_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) < 0]
             neutral_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) == 0]
             
-            # Prepare ALL topic information for LLM (not just top 3/3)
-            all_topic_info = []
-            for t in topics:
-                name = t.get('topic_name', 'Topic')
-                sentiment = t.get('sentiment_label', 'neutral')
-                score = t.get('sentiment_score', 0)
-                density = t.get('density', 0)
-                all_topic_info.append(f"  • {name} ({sentiment}, score: {score:+.2f}, {density} players)")
+            # Handle large datasets: limit prompt size to prevent token overflow
+            # If too many topics, show top/bottom topics with count summary
+            max_topics_per_category = 15
+            
+            def format_topic_list(topic_list, max_count):
+                """Format topic list with truncation if needed"""
+                if len(topic_list) <= max_count:
+                    return chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" 
+                                        for t in topic_list])
+                else:
+                    shown = topic_list[:max_count]
+                    remaining = len(topic_list) - max_count
+                    result = chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" 
+                                          for t in shown])
+                    result += f"\n  • ... and {remaining} more topics"
+                    return result
             
             prompt = f"""Provide a cross-cultural analysis summary for this game feedback.
 
 Player Distribution:
 {chr(10).join(f'- {culture}: {count} players' for culture, count in cultural_summary.items())}
 
-ALL {len(topics)} Valuable Topics Analyzed:
+Total {len(topics)} Valuable Topics Analyzed:
 
 Positive Topics ({len(positive_topics)}):
-{chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" for t in positive_topics])}
+{format_topic_list(positive_topics, max_topics_per_category)}
 
 Negative Topics ({len(negative_topics)}):
-{chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" for t in negative_topics])}
+{format_topic_list(negative_topics, max_topics_per_category)}
 
 Neutral Topics ({len(neutral_topics)}):
-{chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" for t in neutral_topics])}
+{format_topic_list(neutral_topics, max_topics_per_category)}
 
-Provide a comprehensive 3-4 sentence summary considering ALL {len(topics)} topics above, highlighting:
+Provide a comprehensive 3-4 sentence summary considering all {len(topics)} topics, highlighting:
 1. Key differences in preferences between Chinese, Japanese, and English-speaking players
 2. Common themes across all cultures
 3. Notable cultural insights for developers

@@ -52,7 +52,7 @@ class AnalysisReportGenerator:
         print(f"📊 Step 1 Complete: Combined {len(aggregated_data.get('topics', []))} topics from all reports into single pool")
         
         # Step 2: LLM filters valuable topics from the ENTIRE aggregated pool (NOT per-report)
-        print(f"🤖 Step 2: LLM evaluating ALL {len(aggregated_data.get('topics', []))} aggregated topics to filter valuable ones...")
+        print(f"🤖 Step 2: LLM evaluating ALL {len(aggregated_data.get('topics', []))} aggregated topics to filter for valuable ones...")
         enhanced_data = self._enhance_with_llm(aggregated_data)
         if 'valuable_topics_count' in enhanced_data:
             print(f"✅ Step 2 Complete: LLM kept {enhanced_data['valuable_topics_count']} valuable topics from aggregated pool")

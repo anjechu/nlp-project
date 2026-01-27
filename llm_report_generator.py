@@ -134,35 +134,62 @@ class LLMReportGenerator:
     
     def generate_topic_name(self, topic_data: Dict) -> str:
         """
-        Generate a meaningful name for a topic using LLM
+        Generate a meaningful name for a topic using LLM in the ORIGINAL language
         
         Args:
             topic_data: Dictionary containing topic information
             
         Returns:
-            A concise topic name (e.g., "Art Style", "Gameplay Mechanics")
+            A concise topic name in the original language (e.g., "美术风格", "ゲームプレイ", "Art Style")
         """
         if not self.llm_available:
             return f"Topic {topic_data['topic_id']}"
         
         try:
+            # Determine the primary language from samples
+            samples = topic_data.get('samples', [])
+            language = 'English'  # default
+            language_code = 'english'
+            
+            if samples:
+                # Count language occurrences
+                lang_count = {}
+                for sample in samples:
+                    lang = sample.get('language', 'english')
+                    lang_count[lang] = lang_count.get(lang, 0) + 1
+                
+                # Get primary language
+                if lang_count:
+                    language_code = max(lang_count.items(), key=lambda x: x[1])[0]
+                    language = self.LANG_MAP.get(language_code, language_code.capitalize())
+            
             # Prepare context from representative sentences
             sentences = topic_data.get('representative_sentences', [])[:3]
-            samples = topic_data.get('sample_texts', [])[:5]
+            sample_texts = topic_data.get('sample_texts', [])[:5]
             sentiment = topic_data.get('sentiment_label', 'neutral')
             
-            # Create prompt for topic naming
-            prompt = f"""Based on these player feedback samples, provide a concise 2-3 word topic name:
+            # Language-specific instructions
+            language_instruction = {
+                'Chinese': 'IMPORTANT: Generate the topic name in Chinese (中文). Use 2-4 Chinese characters.',
+                'Japanese': 'IMPORTANT: Generate the topic name in Japanese (日本語). Use 2-6 Japanese characters.',
+                'English': 'Generate the topic name in English. Use 2-3 words.',
+                'Korean': 'IMPORTANT: Generate the topic name in Korean (한국어). Use 2-5 Korean characters.'
+            }.get(language, 'Generate the topic name in English. Use 2-3 words.')
+            
+            # Create prompt for topic naming with language context
+            prompt = f"""Analyze these player feedback samples in {language} and provide a concise topic name.
+
+{language_instruction}
 
 Representative feedback:
 {chr(10).join(f'- {s}' for s in sentences)}
 
 Additional samples:
-{chr(10).join(f'- {s}' for s in samples)}
+{chr(10).join(f'- {s}' for s in sample_texts)}
 
 Sentiment: {sentiment}
 
-Topic name (2-3 words only, no explanation):"""
+Topic name (in {language}, concise, no explanation):"""
             
             # Query LLM
             response = self._query_llm(prompt, max_tokens=50)
@@ -170,8 +197,11 @@ Topic name (2-3 words only, no explanation):"""
             # Extract clean topic name (remove any extra explanation)
             topic_name = response.strip().split('\n')[0].strip()
             
+            # Remove quotes if present
+            topic_name = topic_name.strip('"\'')
+            
             # Fallback if response is too long or invalid
-            if len(topic_name) > 30 or len(topic_name.split()) > 4:
+            if len(topic_name) > 50:
                 topic_name = self._extract_keywords(sentences)
             
             return topic_name
@@ -342,14 +372,34 @@ Answer:"""
 - Sentiment: {sentiment}
 - Sample: {sentences[0] if sentences else 'N/A'}""")
             
-            prompt = f"""Evaluate these {len(topics)} game feedback topics and identify which are VALUABLE vs LOW-VALUE.
+            prompt = f"""You are evaluating {len(topics)} game feedback topics. Identify VALUABLE topics that provide ACTIONABLE INSIGHTS for game developers.
 
-VALUABLE topics discuss: gameplay features, graphics, music, story, bugs, balancing, UI/UX, content, multiplayer.
-LOW-VALUE topics: spam, off-topic, generic praise/complaints without substance, repetitive filler.
+STRICT CRITERIA FOR VALUABLE TOPICS:
+✅ KEEP if topic discusses:
+  • Specific gameplay mechanics, features, or systems
+  • Graphics quality, art style, visual elements
+  • Music, sound design, audio quality
+  • Story, narrative, characters, dialogue
+  • Bugs, technical issues, performance problems
+  • Game balance, difficulty, progression
+  • UI/UX issues or praise
+  • Specific game content (levels, missions, items)
+  • Multiplayer functionality, matchmaking
+  • Monetization, pricing, DLC value
+
+❌ REJECT if topic is:
+  • Generic praise without substance ("great game", "love it")
+  • Generic complaints without specifics ("bad game", "boring")
+  • Off-topic content (unrelated to game)
+  • Spam, memes, or nonsense
+  • Pure emotion without actionable feedback
+  • Vague statements with no development value
+
+GOAL: Help developers understand what to improve or keep in their games. Only select topics that provide CLEAR, ACTIONABLE insights.
 
 {chr(10).join(topic_info)}
 
-List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10,12"):"""
+List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10"):"""
             
             response = self._query_llm(prompt, max_tokens=100)
             

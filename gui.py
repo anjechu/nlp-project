@@ -489,9 +489,11 @@ class NLPApp(ctk.CTk):
                 ))
             
             # Generate ONE comprehensive cross-cultural analysis from ALL reports
+            # Pass report filenames for parsing game/language metadata
             html_path = self.analysis_report_generator.generate_analysis_report(
                 all_reports,  # Pass all reports as a list
-                output_dir="analysis"
+                output_dir="analysis",
+                report_filenames=report_names  # Pass filenames for parsing
             )
             
             self.log(f"🌏 Unified cross-cultural analysis generated: {html_path}")

@@ -24,13 +24,14 @@ class AnalysisReportGenerator:
         self.llm_generator = llm_generator
         self.chart_generator = chart_generator
     
-    def generate_analysis_report(self, nlp_data, output_dir: str = "analysis") -> str:
+    def generate_analysis_report(self, nlp_data, output_dir: str = "analysis", report_filenames: Optional[List[str]] = None) -> str:
         """
         Generate a complete cross-cultural analysis report from one or multiple NLP reports
         
         Args:
             nlp_data: Single NLP dict OR list of NLP dicts to aggregate (backward compatible)
             output_dir: Directory to save analysis reports
+            report_filenames: List of original report filenames (for parsing game/language info)
             
         Returns:
             Path to generated HTML report
@@ -48,7 +49,7 @@ class AnalysisReportGenerator:
         print(f"🌏 Aggregating {len(nlp_data_list)} report(s) into unified cross-cultural analysis...")
         
         # Step 1: Aggregate all NLP data into one comprehensive dataset
-        aggregated_data = self._aggregate_nlp_reports(nlp_data_list)
+        aggregated_data = self._aggregate_nlp_reports(nlp_data_list, report_filenames)
         print(f"📊 Step 1 Complete: Combined {len(aggregated_data.get('topics', []))} topics from all reports into single pool")
         
         # Step 2: LLM filters valuable topics from the ENTIRE aggregated pool (NOT per-report)
@@ -79,27 +80,82 @@ class AnalysisReportGenerator:
         print(f"✅ Unified analysis report generated: {html_path}")
         return html_path
     
-    def _aggregate_nlp_reports(self, nlp_data_list: List[Dict]) -> Dict:
+    def _parse_filename(self, filename: str) -> Dict:
+        """
+        Parse filename to extract game name and language
+        Format: comments_gamename_language or Report_comments_gamename_language
+        
+        Args:
+            filename: Report filename (e.g., 'comments_silksong_japanese', 'Report_comments_battlefield6_chinese')
+            
+        Returns:
+            Dictionary with 'game' and 'language' keys
+        """
+        import re
+        
+        # Remove file extension
+        name = os.path.splitext(filename)[0]
+        
+        # Remove common prefixes
+        name = re.sub(r'^Report_', '', name)
+        name = re.sub(r'^comments_', '', name, flags=re.IGNORECASE)
+        
+        # Extract language suffix (chinese, japanese, english)
+        language = 'unknown'
+        game_name = name
+        
+        for lang in ['chinese', 'japanese', 'english']:
+            if name.lower().endswith(f'_{lang}'):
+                language = lang
+                # Remove language suffix from game name
+                game_name = name[:-(len(lang)+1)]
+                break
+        
+        return {
+            'game': game_name,
+            'language': language,
+            'original_filename': filename
+        }
+    
+    def _aggregate_nlp_reports(self, nlp_data_list: List[Dict], report_filenames: Optional[List[str]] = None) -> Dict:
         """
         Aggregate multiple NLP reports into one comprehensive dataset
         
         Args:
             nlp_data_list: List of NLP processing results
+            report_filenames: List of original report filenames (format: comments_gamename_language)
             
         Returns:
-            Single aggregated NLP data dictionary
+            Single aggregated NLP data dictionary with game/language metadata
         """
         if len(nlp_data_list) == 1:
-            return nlp_data_list[0]
+            result = nlp_data_list[0].copy()
+            # Parse filename if available
+            if report_filenames and len(report_filenames) > 0:
+                game_info = self._parse_filename(report_filenames[0])
+                result['game_name'] = game_info['game']
+                result['language'] = game_info['language']
+                result['source_files'] = report_filenames
+            return result
         
         print(f"📊 Aggregating topics from {len(nlp_data_list)} reports...")
+        
+        # Parse filenames to extract game and language info
+        games_and_languages = []
+        if report_filenames:
+            for filename in report_filenames:
+                game_info = self._parse_filename(filename)
+                games_and_languages.append(game_info)
+                print(f"  📁 Detected: {game_info['game']} ({game_info['language']})")
         
         # Aggregate statistics
         total_stats = {
             'total_comments': 0,
             'total_valid': 0,
             'report_count': len(nlp_data_list),
-            'source_reports': []
+            'source_reports': [],
+            'games': [],
+            'languages': set()
         }
         
         # Collect all topics from all reports
@@ -110,23 +166,43 @@ class AnalysisReportGenerator:
             stats = nlp_data.get('statistics', {})
             total_stats['total_comments'] += stats.get('total', 0)
             total_stats['total_valid'] += stats.get('valid', 0)
-            total_stats['source_reports'].append(f"Report {report_idx}")
             
-            # Add topics with updated IDs
+            # Add game/language metadata
+            if report_filenames and report_idx <= len(report_filenames):
+                game_info = games_and_languages[report_idx-1]
+                total_stats['source_reports'].append(game_info)
+                total_stats['games'].append(game_info['game'])
+                total_stats['languages'].add(game_info['language'])
+            else:
+                total_stats['source_reports'].append(f"Report {report_idx}")
+            
+            # Add topics with updated IDs and source metadata
             for topic in nlp_data.get('topics', []):
                 aggregated_topic = {
                     **topic,
                     'topic_id': topic_id_counter,
                     'source_report': report_idx
                 }
+                
+                # Add game/language metadata to topic if available
+                if report_filenames and report_idx <= len(report_filenames):
+                    game_info = games_and_languages[report_idx-1]
+                    aggregated_topic['source_game'] = game_info['game']
+                    aggregated_topic['source_language'] = game_info['language']
+                
                 all_topics.append(aggregated_topic)
                 topic_id_counter += 1
+        
+        # Convert set to list for JSON serialization
+        total_stats['languages'] = list(total_stats['languages'])
         
         aggregated = {
             'statistics': total_stats,
             'topics': all_topics,
             'aggregated': True,
-            'source_count': len(nlp_data_list)
+            'source_count': len(nlp_data_list),
+            'games_analyzed': total_stats['games'],
+            'languages_analyzed': total_stats['languages']
         }
         
         print(f"✅ Aggregated {len(all_topics)} total topics from {len(nlp_data_list)} reports")
@@ -470,6 +546,9 @@ class AnalysisReportGenerator:
         # Executive Summary Section
         html += self._generate_executive_summary(stats, topics, cultural_summary, is_llm_enhanced)
         
+        # Executive Summary for Game Developers (横向对比)
+        html += self._generate_developer_executive_summary(topics, is_llm_enhanced)
+        
         # Visual Overview Section with Charts
         if chart_images:
             html += self._generate_visual_overview(chart_images, charts)
@@ -587,6 +666,130 @@ class AnalysisReportGenerator:
         
         return html
     
+    def _generate_developer_executive_summary(self, topics: List[Dict], is_llm: bool) -> str:
+        """Generate Executive Summary for Game Developers with horizontal comparison (横向对比)"""
+        
+        # Group topics by language and sentiment
+        by_language = {
+            'Chinese': {'positive': [], 'negative': [], 'neutral': []},
+            'Japanese': {'positive': [], 'negative': [], 'neutral': []},
+            'English': {'positive': [], 'negative': [], 'neutral': []}
+        }
+        
+        for topic in topics:
+            # Determine primary language from cultural distribution
+            dist = topic.get('cultural_distribution', {})
+            if not dist:
+                continue
+                
+            primary_lang = max(dist.items(), key=lambda x: x[1])[0] if dist else None
+            culture_name = self._get_culture_name(primary_lang) if primary_lang else None
+            
+            if culture_name in by_language:
+                sentiment = topic.get('sentiment_label', 'neutral').lower()
+                topic_info = {
+                    'name': topic.get('topic_name', f"Topic {topic.get('topic_id')}"),
+                    'density': topic.get('density', 0),
+                    'score': topic.get('sentiment_score', 0),
+                    'summary': topic.get('summary', '')
+                }
+                by_language[culture_name][sentiment].append(topic_info)
+        
+        html = """
+            <div class="section" style="background: linear-gradient(135deg, rgba(108, 92, 231, 0.1) 0%, rgba(74, 105, 189, 0.1) 100%); border: 2px solid #6c5ce7;">
+                <h2>🎮 Executive Summary for Game Developers</h2>
+                <p style="margin-bottom: 20px; color: #d0d0d0; font-size: 1.1em;">
+                    <strong>横向对比 (Horizontal Comparison):</strong> What Chinese, Japanese, and English players like vs. dislike - actionable insights for your game development.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; margin-top: 30px;">
+"""
+        
+        for language in ['Chinese', 'Japanese', 'English']:
+            lang_data = by_language[language]
+            positive = sorted(lang_data['positive'], key=lambda x: x['density'], reverse=True)[:5]
+            negative = sorted(lang_data['negative'], key=lambda x: x['density'], reverse=True)[:5]
+            
+            # Language flag emoji
+            flag = {'Chinese': '🇨🇳', 'Japanese': '🇯🇵', 'English': '🇬🇧'}[language]
+            
+            html += f"""
+                    <div style="background: #0f1419; padding: 25px; border-radius: 8px; border: 1px solid #2d2d44;">
+                        <h3 style="color: #6c5ce7; margin-bottom: 20px;">{flag} {language} Players</h3>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h4 style="color: #4ecdc4; margin-bottom: 10px;">✅ What They Like:</h4>
+"""
+            
+            if positive:
+                for item in positive:
+                    html += f"""
+                            <div style="background: rgba(78, 205, 196, 0.1); padding: 10px; margin: 8px 0; border-left: 3px solid #4ecdc4; border-radius: 4px;">
+                                <div style="font-weight: bold; color: #4ecdc4;">• {item['name']}</div>
+                                <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
+"""
+                    if item['summary'] and is_llm:
+                        summary_short = item['summary'][:100] + '...' if len(item['summary']) > 100 else item['summary']
+                        html += f"""
+                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+"""
+                    html += """
+                            </div>
+"""
+            else:
+                html += """
+                            <div style="color: #808080; font-style: italic; padding: 10px;">No significant positive topics found</div>
+"""
+            
+            html += """
+                        </div>
+                        
+                        <div>
+                            <h4 style="color: #e74c3c; margin-bottom: 10px;">⚠️ What They Dislike:</h4>
+"""
+            
+            if negative:
+                for item in negative:
+                    html += f"""
+                            <div style="background: rgba(231, 76, 60, 0.1); padding: 10px; margin: 8px 0; border-left: 3px solid #e74c3c; border-radius: 4px;">
+                                <div style="font-weight: bold; color: #e74c3c;">• {item['name']}</div>
+                                <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
+"""
+                    if item['summary'] and is_llm:
+                        summary_short = item['summary'][:100] + '...' if len(item['summary']) > 100 else item['summary']
+                        html += f"""
+                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+"""
+                    html += """
+                            </div>
+"""
+            else:
+                html += """
+                            <div style="color: #808080; font-style: italic; padding: 10px;">No significant negative topics found</div>
+"""
+            
+            html += """
+                        </div>
+                    </div>
+"""
+        
+        html += """
+                </div>
+                
+                <div style="background: rgba(108, 92, 231, 0.15); padding: 20px; border-radius: 8px; margin-top: 30px; border-left: 4px solid #6c5ce7;">
+                    <h4 style="color: #6c5ce7; margin-bottom: 10px;">💡 Key Takeaways for Developers:</h4>
+                    <ul style="color: #d0d0d0; line-height: 2; margin-left: 20px;">
+                        <li><strong>Focus on common positive themes</strong> across all cultures to maximize appeal</li>
+                        <li><strong>Address culture-specific complaints</strong> with localized solutions</li>
+                        <li><strong>Prioritize high-density negative topics</strong> - these are critical pain points</li>
+                        <li><strong>Learn from competitors:</strong> What worked well? What failed? Apply to your game</li>
+                    </ul>
+                </div>
+            </div>
+"""
+        
+        return html
+    
     def _generate_visual_overview(self, chart_images: Dict, charts: Dict) -> str:
         """Generate visual overview section with charts"""
         html = """
@@ -689,89 +892,241 @@ class AnalysisReportGenerator:
         return html
     
     def _generate_topics_section(self, topics: List[Dict], is_llm: bool) -> str:
-        """Generate detailed topics section"""
+        """Generate detailed topics section organized by language with hover UI"""
+        
+        # Group topics by primary language
+        by_language = {
+            'Chinese': [],
+            'Japanese': [],
+            'English': [],
+            'Other': []
+        }
+        
+        for topic in topics:
+            # Determine primary language from samples
+            samples = topic.get('samples', [])
+            if samples:
+                # Count language occurrences in samples
+                lang_count = {}
+                for sample in samples:
+                    lang = sample.get('language', '')
+                    culture_name = self._get_culture_name(lang)
+                    if culture_name not in lang_count:
+                        lang_count[culture_name] = 0
+                    lang_count[culture_name] += 1
+                
+                # Get primary language
+                if lang_count:
+                    primary_lang = max(lang_count.items(), key=lambda x: x[1])[0]
+                    if primary_lang in by_language:
+                        by_language[primary_lang].append(topic)
+                    else:
+                        by_language['Other'].append(topic)
+                else:
+                    by_language['Other'].append(topic)
+            else:
+                # Fallback: use cultural_distribution
+                dist = topic.get('cultural_distribution', {})
+                if dist:
+                    primary_code = max(dist.items(), key=lambda x: x[1])[0]
+                    primary_lang = self._get_culture_name(primary_code)
+                    if primary_lang in by_language:
+                        by_language[primary_lang].append(topic)
+                    else:
+                        by_language['Other'].append(topic)
+                else:
+                    by_language['Other'].append(topic)
+        
         html = """
             <div class="section">
                 <h2>🎯 Detailed Topic Analysis</h2>
                 <p style="margin-bottom: 30px; color: #b0b0b0;">
-                    In-depth analysis of each major topic identified in player feedback, 
-                    including sentiment, cultural distribution, and key insights.
+                    In-depth analysis of each topic, organized by language. Topics are named in their original language for authenticity.
                 </p>
+                
+                <style>
+                    .language-tabs {
+                        display: flex;
+                        gap: 10px;
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #2d2d44;
+                    }
+                    
+                    .language-tab {
+                        padding: 12px 30px;
+                        background: #0f1419;
+                        border: 1px solid #2d2d44;
+                        border-bottom: none;
+                        border-radius: 8px 8px 0 0;
+                        cursor: pointer;
+                        color: #a0a0a0;
+                        font-weight: bold;
+                        transition: all 0.3s ease;
+                    }
+                    
+                    .language-tab:hover {
+                        background: #1a1a2e;
+                        color: #d0d0d0;
+                    }
+                    
+                    .language-tab.active {
+                        background: #6c5ce7;
+                        color: #ffffff;
+                        border-color: #6c5ce7;
+                    }
+                    
+                    .language-content {
+                        display: none;
+                    }
+                    
+                    .language-content.active {
+                        display: block;
+                    }
+                    
+                    .topic-card-hover {
+                        background: #0f1419;
+                        padding: 25px;
+                        margin: 20px 0;
+                        border-radius: 8px;
+                        border-left: 4px solid #6c5ce7;
+                        transition: all 0.3s ease;
+                        cursor: pointer;
+                    }
+                    
+                    .topic-card-hover:hover {
+                        transform: translateY(-4px);
+                        box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3);
+                        border-left-color: #4a69bd;
+                        background: #16213e;
+                    }
+                </style>
+                
+                <div class="language-tabs">
+                    <div class="language-tab active" onclick="switchLanguage('chinese')">🇨🇳 中文</div>
+                    <div class="language-tab" onclick="switchLanguage('japanese')">🇯🇵 日本語</div>
+                    <div class="language-tab" onclick="switchLanguage('english')">🇬🇧 English</div>
 """
         
-        # Sort topics by density and show ALL valuable topics
-        # LLM has already filtered to keep only valuable topics, so show all of them
-        sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
+        if by_language['Other']:
+            html += """
+                    <div class="language-tab" onclick="switchLanguage('other')">🌐 Other</div>
+"""
         
-        for idx, topic in enumerate(sorted_topics, 1):  # ALL valuable topics
-            topic_id = topic.get('topic_id', idx)
-            topic_name = topic.get('topic_name', f'Topic {topic_id}')
-            density = topic.get('density', 0)
-            sentiment = topic.get('sentiment_label', 'neutral')
-            score = topic.get('sentiment_score', 0)
+        html += """
+                </div>
+                
+                <script>
+                    function switchLanguage(lang) {
+                        // Update tabs
+                        const tabs = document.querySelectorAll('.language-tab');
+                        tabs.forEach(tab => tab.classList.remove('active'));
+                        event.target.classList.add('active');
+                        
+                        // Update content
+                        const contents = document.querySelectorAll('.language-content');
+                        contents.forEach(content => content.classList.remove('active'));
+                        document.getElementById('lang-' + lang).classList.add('active');
+                    }
+                </script>
+"""
+        
+        # Generate content for each language
+        for lang_key, lang_label in [('chinese', '中文 (Chinese)'), ('japanese', '日本語 (Japanese)'), 
+                                      ('english', 'English'), ('other', 'Other Languages')]:
+            lang_name = {'chinese': 'Chinese', 'japanese': 'Japanese', 'english': 'English', 'other': 'Other'}[lang_key]
+            lang_topics = by_language.get(lang_name, [])
             
-            sentiment_class = f"sentiment-{sentiment.lower()}"
-            sentiment_emoji = {'positive': '😊', 'negative': '😞', 'neutral': '😐'}.get(sentiment.lower(), '😐')
+            if not lang_topics and lang_key != 'other':
+                continue
+            
+            active_class = 'active' if lang_key == 'chinese' else ''
             
             html += f"""
-                <div class="topic-card">
-                    <div class="topic-header">
-                        <div class="topic-title">{idx}. {topic_name}</div>
-                        <div class="sentiment-badge {sentiment_class}">
-                            {sentiment_emoji} {sentiment.capitalize()} ({score:+.3f})
-                        </div>
-                    </div>
+                <div id="lang-{lang_key}" class="language-content {active_class}">
+                    <h3 style="color: #6c5ce7; margin-bottom: 20px;">{lang_label} Topics ({len(lang_topics)})</h3>
+"""
+            
+            if not lang_topics:
+                html += """
+                    <p style="color: #808080; font-style: italic; padding: 20px;">No topics found for this language.</p>
+"""
+            else:
+                # Sort by density
+                sorted_topics = sorted(lang_topics, key=lambda x: x.get('density', 0), reverse=True)
+                
+                for idx, topic in enumerate(sorted_topics, 1):
+                    topic_id = topic.get('topic_id', idx)
+                    topic_name = topic.get('topic_name', f'Topic {topic_id}')
+                    density = topic.get('density', 0)
+                    sentiment = topic.get('sentiment_label', 'neutral')
+                    score = topic.get('sentiment_score', 0)
                     
-                    <div class="topic-meta">
-                        <div class="topic-meta-item">
-                            <span>👥 {density} mentions</span>
+                    sentiment_class = f"sentiment-{sentiment.lower()}"
+                    sentiment_emoji = {'positive': '😊', 'negative': '😞', 'neutral': '😐'}.get(sentiment.lower(), '😐')
+                    
+                    html += f"""
+                    <div class="topic-card-hover">
+                        <div class="topic-header">
+                            <div class="topic-title">{idx}. {topic_name}</div>
+                            <div class="sentiment-badge {sentiment_class}">
+                                {sentiment_emoji} {sentiment.capitalize()} ({score:+.3f})
+                            </div>
+                        </div>
+                        
+                        <div class="topic-meta">
+                            <div class="topic-meta-item">
+                                <span>👥 {density} mentions</span>
+                            </div>
+"""
+                    
+                    # Add cultural distribution
+                    if 'cultural_analysis' in topic:
+                        cultural = topic['cultural_analysis']
+                        dist = cultural.get('distribution', {})
+                        if dist:
+                            cultures_str = ', '.join([f"{c}: {cnt}" for c, cnt in dist.items()])
+                            html += f"""
+                            <div class="topic-meta-item">
+                                <span>🌍 {cultures_str}</span>
+                            </div>
+"""
+                    
+                    html += """
                         </div>
 """
-            
-            # Add cultural distribution
-            if 'cultural_analysis' in topic:
-                cultural = topic['cultural_analysis']
-                dist = cultural.get('distribution', {})
-                if dist:
-                    cultures_str = ', '.join([f"{c}: {cnt}" for c, cnt in dist.items()])
-                    html += f"""
-                        <div class="topic-meta-item">
-                            <span>🌍 {cultures_str}</span>
+                    
+                    # Add LLM summary
+                    if 'summary' in topic and is_llm:
+                        html += f"""
+                        <div class="insight-box">
+                            <strong>💡 Insight:</strong> {topic['summary']}
                         </div>
 """
-            
-            html += """
-                    </div>
+                    
+                    # Add cultural insights
+                    if 'cultural_analysis' in topic and 'llm_insight' in topic['cultural_analysis']:
+                        html += f"""
+                        <div class="cultural-box">
+                            <strong>🗺️ Cross-Cultural Insight:</strong> {topic['cultural_analysis']['llm_insight']}
+                        </div>
 """
-            
-            # Add LLM summary
-            if 'summary' in topic and is_llm:
-                html += f"""
-                    <div class="insight-box">
-                        <strong>💡 Insight:</strong> {topic['summary']}
-                    </div>
+                    
+                    # Add examples
+                    examples = topic.get('representative_sentences', [])
+                    if examples:
+                        html += """
+                        <div class="examples">
+                            <strong>💬 Representative Examples:</strong>
 """
-            
-            # Add cultural insights
-            if 'cultural_analysis' in topic and 'llm_insight' in topic['cultural_analysis']:
-                html += f"""
-                    <div class="cultural-box">
-                        <strong>🗺️ Cross-Cultural Insight:</strong> {topic['cultural_analysis']['llm_insight']}
-                    </div>
+                        for example in examples[:3]:
+                            html += f"""
+                            <div class="example-item">"{example}"</div>
 """
-            
-            # Add examples
-            examples = topic.get('representative_sentences', [])
-            if examples:
-                html += """
-                    <div class="examples">
-                        <strong>💬 Representative Examples:</strong>
+                        html += """
+                        </div>
 """
-                for example in examples[:3]:
-                    html += f"""
-                        <div class="example-item">"{example}"</div>
-"""
-                html += """
+                    
+                    html += """
                     </div>
 """
             

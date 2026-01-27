@@ -539,10 +539,66 @@ class AnalysisReportGenerator:
             border-radius: 8px;
             border: 1px solid #2d2d44;
             transition: all 0.3s ease;
+            cursor: pointer;
         }}
         
         .chart-container:hover img {{
             border-color: #6c5ce7;
+        }}
+        
+        /* Lightbox styles for image zoom */
+        .lightbox {{
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+        }}
+        
+        .lightbox.active {{
+            display: flex;
+        }}
+        
+        .lightbox img {{
+            max-width: 95%;
+            max-height: 95%;
+            border-radius: 8px;
+            box-shadow: 0 0 50px rgba(108, 92, 231, 0.5);
+        }}
+        
+        .lightbox-close {{
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: #ffffff;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            z-index: 10000;
+        }}
+        
+        .lightbox-close:hover {{
+            color: #6c5ce7;
+        }}
+        
+        .lightbox-caption {{
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffffff;
+            font-size: 1.2em;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 8px;
+            z-index: 10000;
         }}
         
         .chart-grid {{
@@ -619,13 +675,16 @@ class AnalysisReportGenerator:
         # Cultural Analysis Section
         html += self._generate_cultural_analysis_section(topics, cultural_summary, is_llm_enhanced)
         
+        # Game-Specific Cross-Cultural Comparison Section (NEW)
+        html += self._generate_game_specific_comparison(topics, original_data, is_llm_enhanced)
+        
         # Detailed Topic Analysis Section
         html += self._generate_topics_section(topics, is_llm_enhanced)
         
         # Methodology Section
         html += self._generate_methodology_section(stats, original_data)
         
-        # Close HTML
+        # Close HTML with JavaScript for lightbox
         html += """
         </div>
         
@@ -634,6 +693,60 @@ class AnalysisReportGenerator:
             <p>For questions or feedback, please refer to the project documentation</p>
         </div>
     </div>
+    
+    <script>
+        // Lightbox functionality for image zoom
+        function openLightbox(img) {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            const caption = document.getElementById('lightbox-caption');
+            
+            lightbox.classList.add('active');
+            lightboxImg.src = img.src;
+            caption.textContent = img.getAttribute('data-caption') || img.alt;
+            
+            // Prevent body scroll when lightbox is open
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            lightbox.classList.remove('active');
+            
+            // Restore body scroll
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Close lightbox with ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                closeLightbox();
+            }
+        });
+        
+        // Language tab functionality for detailed topics
+        function switchLanguage(lang) {
+            // Hide all language contents
+            const allContents = document.querySelectorAll('.language-content');
+            allContents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all tabs
+            const allTabs = document.querySelectorAll('.language-tab');
+            allTabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected language content
+            const selectedContent = document.getElementById('lang-' + lang);
+            if (selectedContent) {
+                selectedContent.classList.add('active');
+            }
+            
+            // Activate selected tab
+            const selectedTab = document.querySelector(`[onclick="switchLanguage('${lang}')"]`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+        }
+    </script>
 </body>
 </html>
 """
@@ -750,8 +863,10 @@ class AnalysisReportGenerator:
             
             if culture_name in by_language:
                 sentiment = topic.get('sentiment_label', 'neutral').lower()
+                # Use English name for consistency in executive summary
+                topic_name_en = topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}"))
                 topic_info = {
-                    'name': topic.get('topic_name', f"Topic {topic.get('topic_id')}"),
+                    'name': topic_name_en,
                     'density': topic.get('density', 0),
                     'score': topic.get('sentiment_score', 0),
                     'summary': topic.get('summary', '')
@@ -853,14 +968,138 @@ class AnalysisReportGenerator:
         
         return html
     
+    def _generate_game_specific_comparison(self, topics: List[Dict], original_data: Dict, is_llm: bool) -> str:
+        """
+        Generate game-specific cross-cultural comparison section
+        Shows same game analyzed across different languages/cultures
+        Example: Black Myth Wukong - Chinese vs Japanese vs English player preferences
+        """
+        
+        # Group topics by game and language
+        game_language_topics = {}
+        
+        for topic in topics:
+            game = topic.get('source_game', 'Unknown Game')
+            lang = topic.get('source_language', 'unknown')
+            
+            if game not in game_language_topics:
+                game_language_topics[game] = {}
+            
+            if lang not in game_language_topics[game]:
+                game_language_topics[game][lang] = []
+            
+            game_language_topics[game][lang].append(topic)
+        
+        # Only show this section if we have multiple games or multiple languages per game
+        if len(game_language_topics) == 0 or (len(game_language_topics) == 1 and 
+            len(list(game_language_topics.values())[0]) <= 1):
+            return ""
+        
+        html = """
+            <div class="section" style="background: linear-gradient(135deg, rgba(74, 105, 189, 0.1) 0%, rgba(108, 92, 231, 0.1) 100%); border: 2px solid #4a69bd;">
+                <h2>🎮 Game-Specific Cross-Cultural Comparison</h2>
+                <p style="margin-bottom: 30px; color: #d0d0d0; font-size: 1.1em;">
+                    <strong>Per-Game Analysis:</strong> Compare how players from different cultures perceive the same game. 
+                    Understand culture-specific preferences to tailor your game for each market.
+                </p>
+"""
+        
+        # Generate comparison for each game
+        for game_name, language_data in sorted(game_language_topics.items()):
+            if len(language_data) <= 1:  # Skip games with only one language
+                continue
+            
+            html += f"""
+                <div style="background: #0f1419; padding: 30px; border-radius: 8px; margin: 25px 0; border: 1px solid #2d2d44;">
+                    <h3 style="color: #6c5ce7; margin-bottom: 25px; font-size: 1.5em;">🎯 {game_name}</h3>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+"""
+            
+            # Display topics for each language
+            for language in sorted(language_data.keys()):
+                lang_topics = language_data[language]
+                culture_name = self._get_culture_name(language)
+                flag = {'Chinese': '🇨🇳', 'Japanese': '🇯🇵', 'English': '🇬🇧', 'Korean': '🇰🇷'}.get(culture_name, '🌍')
+                
+                # Separate by sentiment
+                positive_topics = [t for t in lang_topics if t.get('sentiment_label', '').lower() == 'positive']
+                negative_topics = [t for t in lang_topics if t.get('sentiment_label', '').lower() == 'negative']
+                
+                # Sort by density
+                positive_topics = sorted(positive_topics, key=lambda x: x.get('density', 0), reverse=True)[:3]
+                negative_topics = sorted(negative_topics, key=lambda x: x.get('density', 0), reverse=True)[:3]
+                
+                html += f"""
+                        <div style="background: #16213e; padding: 20px; border-radius: 8px; border: 1px solid #2d2d44;">
+                            <h4 style="color: #4a69bd; margin-bottom: 15px;">{flag} {culture_name}</h4>
+                            
+                            <div style="margin-bottom: 15px;">
+                                <div style="color: #4ecdc4; font-weight: bold; margin-bottom: 8px;">👍 Top Likes:</div>
+"""
+                
+                if positive_topics:
+                    for topic in positive_topics:
+                        topic_name = topic.get('topic_name_en', topic.get('topic_name', 'Unknown'))
+                        density = topic.get('density', 0)
+                        html += f"""
+                                <div style="background: rgba(78, 205, 196, 0.15); padding: 8px; margin: 5px 0; border-left: 2px solid #4ecdc4; border-radius: 4px;">
+                                    <span style="color: #4ecdc4;">• {topic_name}</span>
+                                    <span style="color: #808080; font-size: 0.85em; margin-left: 10px;">({density} players)</span>
+                                </div>
+"""
+                else:
+                    html += """
+                                <div style="color: #808080; font-style: italic; padding: 5px;">No positive feedback</div>
+"""
+                
+                html += """
+                            </div>
+                            
+                            <div>
+                                <div style="color: #e74c3c; font-weight: bold; margin-bottom: 8px;">👎 Top Dislikes:</div>
+"""
+                
+                if negative_topics:
+                    for topic in negative_topics:
+                        topic_name = topic.get('topic_name_en', topic.get('topic_name', 'Unknown'))
+                        density = topic.get('density', 0)
+                        html += f"""
+                                <div style="background: rgba(231, 76, 60, 0.15); padding: 8px; margin: 5px 0; border-left: 2px solid #e74c3c; border-radius: 4px;">
+                                    <span style="color: #e74c3c;">• {topic_name}</span>
+                                    <span style="color: #808080; font-size: 0.85em; margin-left: 10px;">({density} players)</span>
+                                </div>
+"""
+                else:
+                    html += """
+                                <div style="color: #808080; font-style: italic; padding: 5px;">No negative feedback</div>
+"""
+                
+                html += """
+                            </div>
+                        </div>
+"""
+            
+            html += """
+                    </div>
+                </div>
+"""
+        
+        html += """
+            </div>
+"""
+        
+        return html
+    
     def _generate_visual_overview(self, chart_images: Dict, charts: Dict) -> str:
-        """Generate visual overview section with charts"""
+        """Generate visual overview section with charts and lightbox functionality"""
         html = """
             <div class="section">
                 <h2>📈 Visual Overview</h2>
                 <p style="margin-bottom: 30px; color: #b0b0b0;">
                     The following visualizations provide a quick overview of sentiment distribution, 
                     topic density, and score patterns across all player feedback.
+                    <strong>Click on any chart to view it in full screen.</strong>
                 </p>
                 
                 <div class="chart-grid">
@@ -871,12 +1110,19 @@ class AnalysisReportGenerator:
             html += f"""
                     <div class="chart-container">
                         <h3>{chart_title}</h3>
-                        <img src="data:image/png;base64,{img_base64}" alt="{chart_title}" />
+                        <img src="data:image/png;base64,{img_base64}" alt="{chart_title}" class="chart-image" data-caption="{chart_title}" onclick="openLightbox(this)" />
                     </div>
 """
         
         html += """
                 </div>
+            </div>
+            
+            <!-- Lightbox for image zoom -->
+            <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+                <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+                <img id="lightbox-img" src="" alt="" />
+                <div id="lightbox-caption" class="lightbox-caption"></div>
             </div>
 """
         
@@ -910,7 +1156,7 @@ class AnalysisReportGenerator:
                     culture_topics[culture]['negative'] += count
                 
                 culture_topics[culture]['topics'].append({
-                    'name': topic.get('topic_name', f"Topic {topic.get('topic_id')}"),
+                    'name': topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}")),
                     'count': count,
                     'sentiment': sentiment
                 })
@@ -1123,7 +1369,16 @@ class AnalysisReportGenerator:
                 
                 for idx, topic in enumerate(sorted_topics, 1):
                     topic_id = topic.get('topic_id', idx)
-                    topic_name = topic.get('topic_name', f'Topic {topic_id}')
+                    # Use English name as primary, show native name in parentheses if different
+                    topic_name_en = topic.get('topic_name_en', topic.get('topic_name', f'Topic {topic_id}'))
+                    topic_name_native = topic.get('topic_name_native', topic_name_en)
+                    
+                    # Display format: "English Name (Native Name)" if they differ
+                    if topic_name_native != topic_name_en and topic_name_native:
+                        display_name = f"{topic_name_en} ({topic_name_native})"
+                    else:
+                        display_name = topic_name_en
+                    
                     density = topic.get('density', 0)
                     sentiment = topic.get('sentiment_label', 'neutral')
                     score = topic.get('sentiment_score', 0)
@@ -1134,7 +1389,7 @@ class AnalysisReportGenerator:
                     html += f"""
                     <div class="topic-card-hover">
                         <div class="topic-header">
-                            <div class="topic-title">{idx}. {topic_name}</div>
+                            <div class="topic-title">{idx}. {display_name}</div>
                             <div class="sentiment-badge {sentiment_class}">
                                 {sentiment_emoji} {sentiment.capitalize()} ({score:+.3f})
                             </div>

@@ -144,30 +144,38 @@ class LLMReportGenerator:
             print(f"⚠️ LLM query failed: {e}")
             return ""
     
-    def generate_topic_name(self, topic_data: Dict) -> str:
+    def generate_topic_name(self, topic_data: Dict, game_name: str = None, language: str = None) -> Dict:
         """
-        Generate a meaningful name for a topic using LLM in the ORIGINAL language
+        Generate a meaningful name for a topic using LLM with DUAL-LANGUAGE output
         
-        The original language is determined by analyzing the language distribution
-        in the topic's samples. The LLM then generates a topic name in that language
-        (e.g., Chinese samples → Chinese topic name).
+        The method generates BOTH native language name AND English name to ensure
+        consistent display across all report sections, addressing the issue where
+        topic names were inconsistent (mixing Chinese/Japanese/English).
         
         Args:
             topic_data: Dictionary containing topic information
+            game_name: Optional game name for context
+            language: Optional language override (otherwise determined from samples)
             
         Returns:
-            A concise topic name in the original language (e.g., "美术风格", "ゲームプレイ", "Art Style")
+            Dictionary with 'topic_name_native', 'topic_name_en', and 'primary_language' keys
+            Example: {'topic_name_native': '美术风格', 'topic_name_en': 'Art Style', 'primary_language': 'Chinese'}
         """
         if not self.llm_available:
-            return f"Topic {topic_data['topic_id']}"
+            topic_id = topic_data.get('topic_id', 'Unknown')
+            return {
+                'topic_name_native': f"Topic {topic_id}",
+                'topic_name_en': f"Topic {topic_id}",
+                'primary_language': 'English'
+            }
         
         try:
-            # Determine the primary language from samples
+            # Determine the primary language from samples or use override
             samples = topic_data.get('samples', [])
-            language = 'English'  # default
+            primary_language = language if language else 'English'  # default
             language_code = 'english'
             
-            if samples:
+            if not language and samples:
                 # Count language occurrences
                 lang_count = {}
                 for sample in samples:
@@ -177,22 +185,24 @@ class LLMReportGenerator:
                 # Get primary language
                 if lang_count:
                     language_code = max(lang_count.items(), key=lambda x: x[1])[0]
-                    language = self.LANG_MAP.get(language_code, language_code.capitalize())
+                    primary_language = self.LANG_MAP.get(language_code, language_code.capitalize())
             
             # Prepare context from representative sentences
             sentences = topic_data.get('representative_sentences', [])[:3]
             sample_texts = topic_data.get('sample_texts', [])[:5]
             sentiment = topic_data.get('sentiment_label', 'neutral')
             
-            # Language-specific instructions
+            # Language-specific instructions for native name
             language_instruction = self.LANGUAGE_INSTRUCTIONS.get(
-                language, 
+                primary_language, 
                 'Generate the topic name in English. Use 2-3 words.'
             )
             
-            # Create prompt for topic naming with language context
-            prompt = f"""Analyze these player feedback samples in {language} and provide a concise topic name.
+            # Create DUAL-LANGUAGE prompt (critical fix for language consistency)
+            prompt = f"""Analyze these player feedback samples and provide topic names in BOTH native language AND English.
 
+Game: {game_name if game_name else 'Unknown Game'}
+Primary Language: {primary_language}
 {language_instruction}
 
 Representative feedback:
@@ -203,26 +213,50 @@ Additional samples:
 
 Sentiment: {sentiment}
 
-Topic name (in {language}, concise, no explanation):"""
+CRITICAL: You MUST provide BOTH names on separate lines:
+Line 1: Native topic name in {primary_language} (concise, 2-4 words)
+Line 2: English topic name (concise, 2-3 words)
+
+Example for Chinese feedback:
+美术风格
+Art Style
+
+Now provide the two topic names (NO explanations):"""
             
             # Query LLM
-            response = self._query_llm(prompt, max_tokens=50)
+            response = self._query_llm(prompt, max_tokens=80)
             
-            # Extract clean topic name (remove any extra explanation)
-            topic_name = response.strip().split('\n')[0].strip()
+            # Parse the dual-language response
+            lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
             
-            # Remove quotes if present
-            topic_name = topic_name.strip('"\'')
+            topic_name_native = lines[0].strip('"\'') if len(lines) > 0 else self._extract_keywords(sentences)
+            topic_name_en = lines[1].strip('"\'') if len(lines) > 1 else topic_name_native
             
             # Fallback if response is too long or invalid
-            if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH:
-                topic_name = self._extract_keywords(sentences)
+            if len(topic_name_native) > self.MAX_TOPIC_NAME_LENGTH:
+                topic_name_native = self._extract_keywords(sentences)
+            if len(topic_name_en) > self.MAX_TOPIC_NAME_LENGTH:
+                topic_name_en = self._extract_keywords(sentences)
             
-            return topic_name
+            # If native and English are the same and language is not English, generate English fallback
+            if topic_name_native == topic_name_en and primary_language != 'English':
+                topic_name_en = self._extract_keywords(sentences)
+            
+            return {
+                'topic_name_native': topic_name_native,
+                'topic_name_en': topic_name_en,
+                'primary_language': primary_language
+            }
             
         except Exception as e:
             print(f"⚠️ Error generating topic name: {e}")
-            return f"Topic {topic_data['topic_id']}"
+            topic_id = topic_data.get('topic_id', 'Unknown')
+            fallback_name = f"Topic {topic_id}"
+            return {
+                'topic_name_native': fallback_name,
+                'topic_name_en': fallback_name,
+                'primary_language': 'English'
+            }
     
     def _extract_keywords(self, sentences: List[str]) -> str:
         """Fallback method to extract keywords if LLM fails"""
@@ -390,10 +424,10 @@ Answer:"""
 
 STRICT CRITERIA FOR VALUABLE TOPICS:
 ✅ KEEP if topic discusses:
-  • Specific gameplay mechanics, features, or systems
-  • Graphics quality, art style, visual elements
-  • Music, sound design, audio quality
-  • Story, narrative, characters, dialogue
+  • Specific gameplay mechanics, features, or systems (POSITIVE OR NEGATIVE)
+  • Graphics quality, art style, visual elements (POSITIVE OR NEGATIVE)
+  • Music, sound design, audio quality (POSITIVE OR NEGATIVE)
+  • Story, narrative, characters, dialogue (POSITIVE OR NEGATIVE)
   • Bugs, technical issues, performance problems
   • Game balance, difficulty, progression
   • UI/UX issues or praise
@@ -401,15 +435,21 @@ STRICT CRITERIA FOR VALUABLE TOPICS:
   • Multiplayer functionality, matchmaking
   • Monetization, pricing, DLC value
 
-❌ REJECT if topic is:
-  • Generic praise without substance ("great game", "love it")
-  • Generic complaints without specifics ("bad game", "boring")
+⚠️ CRITICAL: Positive feedback regarding specific mechanics/art/features IS VALUABLE!
+   - "Beautiful graphics" with specific mentions → KEEP
+   - "Great gameplay mechanics" with examples → KEEP
+   - "Love the art style" with details → KEEP
+   Developers need to know what players LIKE to preserve those elements.
+
+❌ REJECT ONLY if topic is:
+  • Generic praise without substance ("great game", "love it", "amazing")
+  • Generic complaints without specifics ("bad game", "boring", "terrible")
   • Off-topic content (unrelated to game)
   • Spam, memes, or nonsense
-  • Pure emotion without actionable feedback
+  • Pure emotion without actionable feedback (just "wow", "lol", "wtf")
   • Vague statements with no development value
 
-GOAL: Help developers understand what to improve or keep in their games. Only select topics that provide CLEAR, ACTIONABLE insights.
+GOAL: Help developers understand BOTH what to improve AND what to preserve in their games. Include topics that provide CLEAR, ACTIONABLE insights about specific game aspects.
 
 {chr(10).join(topic_info)}
 
@@ -442,17 +482,22 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10")
         print(f"📊 Density-based filtering: {len(topics)} topics → {len(filtered)} topics (threshold: {threshold} players)")
         return filtered
 
-    def generate_enhanced_report(self, nlp_result: Dict, include_charts: bool = True, include_cultural_analysis: bool = True) -> Dict:
+    def generate_enhanced_report(self, nlp_result: Dict, game_name: str = None, language: str = None, include_charts: bool = True, include_cultural_analysis: bool = True) -> Dict:
         """
-        Generate an enhanced report with LLM-generated topic names, insights, and cross-cultural analysis
+        Generate an enhanced report with LLM-generated DUAL-LANGUAGE topic names, insights, and cross-cultural analysis
+        
+        This method implements improved topic naming that returns BOTH native and English names
+        for consistent display across all report sections.
         
         Args:
             nlp_result: The original NLP processing result
+            game_name: Optional game name for context in topic naming
+            language: Optional language for this specific report (for Map phase)
             include_charts: Whether to generate chart data
             include_cultural_analysis: Whether to include cross-cultural analysis
             
         Returns:
-            Enhanced report dictionary with topic names, summaries, cultural insights, and chart data
+            Enhanced report dictionary with dual-language topic names, summaries, cultural insights, and chart data
         """
         # Step 1: Filter topics using LLM (removes hardcoded 5-topic limit)
         all_topics = nlp_result.get('topics', [])
@@ -463,22 +508,28 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10")
         enhanced_topics = []
         
         for topic in valuable_topics:
-            # Generate topic name using LLM
-            topic_name = self.generate_topic_name(topic)
+            # Generate DUAL-LANGUAGE topic name using LLM
+            topic_names = self.generate_topic_name(topic, game_name=game_name, language=language)
+            
+            # Use English name for summary generation (for consistency)
+            topic_name_for_summary = topic_names['topic_name_en']
             
             # Generate summary using LLM
-            summary = self.generate_topic_summary(topic, topic_name)
+            summary = self.generate_topic_summary(topic, topic_name_for_summary)
             
-            # Create enhanced topic entry
+            # Create enhanced topic entry with BOTH names
             enhanced_topic = {
                 **topic,  # Keep all original data
-                'topic_name': topic_name,
+                'topic_name': topic_names['topic_name_en'],  # Primary display name (English for consistency)
+                'topic_name_en': topic_names['topic_name_en'],  # Explicit English name
+                'topic_name_native': topic_names['topic_name_native'],  # Native language name
+                'primary_language': topic_names['primary_language'],  # Language of the feedback
                 'summary': summary
             }
             
             # Add cross-cultural analysis if requested
             if include_cultural_analysis:
-                cultural_analysis = self.analyze_cross_cultural_preferences(topic, topic_name)
+                cultural_analysis = self.analyze_cross_cultural_preferences(topic, topic_name_for_summary)
                 enhanced_topic['cultural_analysis'] = cultural_analysis
             
             enhanced_topics.append(enhanced_topic)
@@ -490,7 +541,9 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10")
             'llm_enhanced': self.llm_available,
             'cross_cultural': include_cultural_analysis,
             'total_topics_analyzed': len(all_topics),
-            'valuable_topics_count': len(valuable_topics)
+            'valuable_topics_count': len(valuable_topics),
+            'game_name': game_name,  # Add game context
+            'language': language  # Add language context
         }
         
         # Add chart data if requested
@@ -584,6 +637,7 @@ Summary:"""
         
         Important: This receives ONLY the LLM-filtered valuable topics.
         We show ALL of them without further limiting.
+        Uses English names for consistency across all charts.
         """
         
         # Sentiment distribution
@@ -594,9 +648,10 @@ Summary:"""
         
         # Topic density chart (ALL valuable topics, not limited)
         # LLM has already filtered to keep only valuable topics, so show all of them
+        # Use English names for consistency
         sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
         density_chart = {
-            'labels': [t.get('topic_name', f"Topic {t['topic_id']}") for t in sorted_topics],
+            'labels': [t.get('topic_name_en', t.get('topic_name', f"Topic {t['topic_id']}")) for t in sorted_topics],
             'values': [t.get('density', 0) for t in sorted_topics]
         }
         

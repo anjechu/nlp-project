@@ -367,8 +367,9 @@ class NLPApp(ctk.CTk):
             text += f"🏷️  Topics Found: {len(topics)}\n"
             text += f"{'✨ LLM Enhanced' if is_enhanced else '📝 Basic Analysis'}\n\n"
             
-            # Display top 5 topics with enhanced formatting
-            for idx, topic in enumerate(topics[:5], 1):
+            # Display all valuable topics (or top 10 if too many for display)
+            display_limit = min(len(topics), 10) if len(topics) > 0 else 0
+            for idx, topic in enumerate(topics[:display_limit], 1):
                 topic_id = topic.get('topic_id', idx)
                 density = topic.get('density', 0)
                 sentiment = topic.get('sentiment_label', 'neutral')
@@ -407,6 +408,10 @@ class NLPApp(ctk.CTk):
                     text += f"     💬 Example: \"{rep_sentences[0][:80]}{'...' if len(rep_sentences[0]) > 80 else ''}\"\n"
                 
                 text += "\n"
+            
+            # Show note if there are more topics
+            if len(topics) > display_limit:
+                text += f"  📝 ... and {len(topics) - display_limit} more topics (view full report for complete analysis)\n\n"
             
             # Show overall cultural summary if available
             if 'cultural_summary' in data:
@@ -560,8 +565,8 @@ class NLPApp(ctk.CTk):
             context_str += f"\n🎮 GAME: {game_id}\n"
             context_str += "="*30 + "\n"
             
-            # Only take top 5 most important topics
-            for t in data['topics'][:5]:
+            # Use all valuable topics (already filtered by LLM), not just top 5
+            for t in data['topics']:
                 topic_id = t['topic_id']
                 label = t['sentiment_label'].upper()
                 

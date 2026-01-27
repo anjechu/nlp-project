@@ -49,14 +49,21 @@ class AnalysisReportGenerator:
         
         # Step 1: Aggregate all NLP data into one comprehensive dataset
         aggregated_data = self._aggregate_nlp_reports(nlp_data_list)
+        print(f"📊 Step 1 Complete: Combined {len(aggregated_data.get('topics', []))} topics from all reports into single pool")
         
-        # Step 2: Enhance with LLM (topic naming, summaries, cultural analysis)
+        # Step 2: LLM filters valuable topics from the ENTIRE aggregated pool (NOT per-report)
+        print(f"🤖 Step 2: LLM evaluating ALL {len(aggregated_data.get('topics', []))} aggregated topics to filter valuable ones...")
         enhanced_data = self._enhance_with_llm(aggregated_data)
+        if 'valuable_topics_count' in enhanced_data:
+            print(f"✅ Step 2 Complete: LLM kept {enhanced_data['valuable_topics_count']} valuable topics from aggregated pool")
         
-        # Step 3: Generate charts and get base64 encoded images
+        # Step 3: Generate charts using ONLY the filtered valuable topics
+        valuable_topic_count = len(enhanced_data.get('topics', []))
+        print(f"📈 Step 3: Generating charts from ALL {valuable_topic_count} valuable topics (no limits)...")
         chart_images = self._generate_chart_images(enhanced_data, base_name, output_dir)
         
-        # Step 4: Generate HTML report
+        # Step 4: Generate HTML report with ALL valuable topics
+        print(f"📄 Step 4: Creating HTML report with ALL {valuable_topic_count} valuable topics...")
         html_content = self._generate_html_report(enhanced_data, chart_images, aggregated_data)
         
         # Step 5: Save report
@@ -126,7 +133,12 @@ class AnalysisReportGenerator:
         return aggregated
     
     def _enhance_with_llm(self, nlp_data: Dict) -> Dict:
-        """Enhance NLP data with LLM insights"""
+        """
+        Enhance aggregated NLP data with LLM insights
+        
+        Important: This is called AFTER aggregation, so all topics from all reports
+        are already combined. LLM filtering happens once on the entire pool.
+        """
         if self.llm_generator and self.llm_generator.llm_available:
             return self.llm_generator.generate_enhanced_report(
                 nlp_data, 
@@ -657,8 +669,8 @@ class AnalysisReportGenerator:
                     <div class="cultural-dist">
 """
             
-            # Show top 5 topics for this culture
-            for topic_info in sorted(data['topics'], key=lambda x: x['count'], reverse=True)[:5]:
+            # Show ALL topics for this culture (LLM already filtered valuable ones)
+            for topic_info in sorted(data['topics'], key=lambda x: x['count'], reverse=True):
                 html += f"""
                         <div class="cultural-item">
                             {topic_info['name']}: {topic_info['count']} mentions
@@ -687,10 +699,11 @@ class AnalysisReportGenerator:
                 </p>
 """
         
-        # Sort topics by density
+        # Sort topics by density and show ALL valuable topics
+        # LLM has already filtered to keep only valuable topics, so show all of them
         sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
         
-        for idx, topic in enumerate(sorted_topics[:15], 1):  # Top 15 topics
+        for idx, topic in enumerate(sorted_topics, 1):  # ALL valuable topics
             topic_id = topic.get('topic_id', idx)
             topic_name = topic.get('topic_name', f'Topic {topic_id}')
             density = topic.get('density', 0)

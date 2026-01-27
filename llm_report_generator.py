@@ -487,7 +487,12 @@ Summary:"""
             return "Unable to generate cultural summary."
     
     def _generate_chart_data(self, topics: List[Dict]) -> Dict:
-        """Generate data for charts and visualizations"""
+        """
+        Generate data for charts and visualizations
+        
+        Important: This receives ONLY the LLM-filtered valuable topics.
+        We show ALL of them without further limiting.
+        """
         
         # Sentiment distribution
         sentiment_counts = {'positive': 0, 'neutral': 0, 'negative': 0}
@@ -495,11 +500,12 @@ Summary:"""
             label = topic.get('sentiment_label', 'neutral').lower()
             sentiment_counts[label] = sentiment_counts.get(label, 0) + topic.get('density', 0)
         
-        # Topic density chart (top topics)
-        top_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)[:10]
+        # Topic density chart (ALL valuable topics, not limited)
+        # LLM has already filtered to keep only valuable topics, so show all of them
+        sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
         density_chart = {
-            'labels': [t.get('topic_name', f"Topic {t['topic_id']}") for t in top_topics],
-            'values': [t.get('density', 0) for t in top_topics]
+            'labels': [t.get('topic_name', f"Topic {t['topic_id']}") for t in sorted_topics],
+            'values': [t.get('density', 0) for t in sorted_topics]
         }
         
         # Sentiment score distribution

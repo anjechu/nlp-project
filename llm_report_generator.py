@@ -223,8 +223,29 @@ English topic name:"""
                     topic_name = ' '.join(english_words[:3])  # Take up to 3 words
                     print(f"   → Extracted English parts: {topic_name}")
                 else:
-                    # If no English in LLM response, extract from sentences
-                    topic_name = self._extract_keywords(sentences, topic_id=topic_id)
+                    # If no English in LLM response, try LLM translation as fallback
+                    print(f"   → No English found, attempting LLM translation...")
+                    try:
+                        translation_prompt = f"""Translate this topic name to English. Keep it concise (2-5 words).
+
+Topic name: {topic_name}
+
+Provide ONLY the English translation, nothing else. Use specific terminology related to gaming/feedback."""
+                        
+                        translated_name = self.llm_handler.generate_completion(translation_prompt).strip()
+                        # Clean the translation
+                        translated_name = translated_name.strip('"\'•–—: ').strip('-').strip('0123456789. ')
+                        
+                        # Verify translation is actually English
+                        if translated_name and not any(ord(c) > 127 for c in translated_name):
+                            topic_name = translated_name
+                            print(f"   → LLM translated to: {topic_name}")
+                        else:
+                            # Translation failed or still contains non-English, extract from sentences
+                            topic_name = self._extract_keywords(sentences, topic_id=topic_id)
+                    except Exception as trans_error:
+                        print(f"   → Translation failed: {trans_error}, using keyword extraction")
+                        topic_name = self._extract_keywords(sentences, topic_id=topic_id)
             
             # Check for overly generic names and force re-extraction
             generic_names = {

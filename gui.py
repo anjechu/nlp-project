@@ -19,6 +19,7 @@ except ImportError:
 # Import LLM report generator
 try:
     from llm_report_generator import LLMReportGenerator
+    from chart_generator import ReportChartGenerator
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
@@ -56,9 +57,14 @@ class NLPApp(ctk.CTk):
         
         # Initialize LLM report generator if available
         self.llm_generator = None
+        self.chart_generator = None
         self.use_ollama = False  # Can be configured via settings
         if LLM_AVAILABLE:
             try:
+                # Initialize chart generator
+                self.chart_generator = ReportChartGenerator(output_dir="charts")
+                print("✅ Chart Generator initialized")
+                
                 # Try Ollama first (easier for local setup)
                 import requests
                 try:
@@ -77,6 +83,7 @@ class NLPApp(ctk.CTk):
             except Exception as e:
                 print(f"⚠️ Failed to initialize LLM: {e}")
                 self.llm_generator = None
+                self.chart_generator = None
 
         self._init_ui()
 
@@ -423,6 +430,13 @@ class NLPApp(ctk.CTk):
                     text += f"     Average Score: {stats.get('mean', 0):.3f} "
                     text += f"(σ={stats.get('std', 0):.3f})\n"
             
+            # Show chart file locations if available
+            if 'chart_files' in data and data['chart_files']:
+                text += f"\n  📈 GENERATED CHARTS:\n"
+                for chart_type, path in data['chart_files'].items():
+                    chart_name = chart_type.replace('_', ' ').title()
+                    text += f"     • {chart_name}: {path}\n"
+            
             text += f"\n{'─'*80}\n\n"
             
         self.report_box.insert("0.0", text)
@@ -456,20 +470,48 @@ class NLPApp(ctk.CTk):
                     self.llm_status_label.configure(text=f"Enhancing {i}/{t}: {n[:30]}..."))
                 
                 # Generate enhanced report
-                enhanced_data = self.llm_generator.generate_enhanced_report(data, include_charts=True)
+                enhanced_data = self.llm_generator.generate_enhanced_report(data, include_charts=True, include_cultural_analysis=True)
                 
                 # Update the loaded report
                 self.loaded_reports[name] = enhanced_data
                 enhanced_count += 1
                 
-                self.log(f"✨ Enhanced report: {name}")
+                # Save enhanced report to file
+                enhanced_filename = name.replace('.json', '_enhanced.json')
+                enhanced_path = os.path.join('reports', enhanced_filename)
+                try:
+                    with open(enhanced_path, 'w', encoding='utf-8') as f:
+                        json.dump(enhanced_data, f, ensure_ascii=False, indent=2)
+                    self.log(f"✨ Enhanced report saved: {enhanced_path}")
+                except Exception as e:
+                    self.log(f"⚠️ Could not save enhanced report: {e}")
+                
+                # Generate chart images if chart generator is available
+                if self.chart_generator and 'charts' in enhanced_data:
+                    try:
+                        # Generate all charts for this report
+                        base_name = name.replace('.json', '').replace('Report_', '')
+                        chart_paths = self.chart_generator.generate_all_charts(enhanced_data, base_name)
+                        self.log(f"📊 Generated {len(chart_paths)} charts in charts/ directory")
+                        
+                        # Store chart paths in enhanced data
+                        enhanced_data['chart_files'] = chart_paths
+                        self.loaded_reports[name] = enhanced_data
+                    except Exception as e:
+                        self.log(f"⚠️ Chart generation error: {e}")
             
             # Update display on main thread
             self.after(0, self.display_report_summary)
             self.after(0, lambda: self.llm_status_label.configure(text=f"Enhanced {enhanced_count} reports"))
             
-            self.after(0, lambda: tkinter.messagebox.showinfo("Enhancement Complete", 
-                                         f"Successfully enhanced {enhanced_count} reports with LLM-generated insights!"))
+            # Show completion message with file locations
+            message = f"Successfully enhanced {enhanced_count} reports!\n\n"
+            message += "📁 Enhanced reports saved to: reports/*_enhanced.json\n"
+            if self.chart_generator:
+                message += "📊 Charts saved to: charts/*.png\n"
+            message += "\nView the Insights Report tab to see the enhanced analysis."
+            
+            self.after(0, lambda: tkinter.messagebox.showinfo("Enhancement Complete", message))
             
         except Exception as e:
             self.log(f"❌ LLM Enhancement Error: {str(e)}")

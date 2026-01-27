@@ -1020,12 +1020,18 @@ class AnalysisReportGenerator:
                         // Update tabs
                         const tabs = document.querySelectorAll('.language-tab');
                         tabs.forEach(tab => tab.classList.remove('active'));
-                        event.target.classList.add('active');
+                        
+                        // Find and activate the clicked tab
+                        const clickedTab = Array.from(tabs).find(tab => 
+                            tab.getAttribute('onclick').includes("'" + lang + "'")
+                        );
+                        if (clickedTab) clickedTab.classList.add('active');
                         
                         // Update content
                         const contents = document.querySelectorAll('.language-content');
                         contents.forEach(content => content.classList.remove('active'));
-                        document.getElementById('lang-' + lang).classList.add('active');
+                        const targetContent = document.getElementById('lang-' + lang);
+                        if (targetContent) targetContent.classList.add('active');
                     }
                 </script>
 """

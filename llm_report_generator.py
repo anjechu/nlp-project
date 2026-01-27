@@ -22,6 +22,17 @@ class LLMReportGenerator:
         'korean': 'Korean'
     }
     
+    # Topic naming configuration
+    MAX_TOPIC_NAME_LENGTH = 50  # Maximum length for generated topic names
+    
+    # Language-specific instructions for topic naming
+    LANGUAGE_INSTRUCTIONS = {
+        'Chinese': 'IMPORTANT: Generate the topic name in Chinese (中文). Use 2-4 Chinese characters.',
+        'Japanese': 'IMPORTANT: Generate the topic name in Japanese (日本語). Use 2-6 Japanese characters.',
+        'English': 'Generate the topic name in English. Use 2-3 words.',
+        'Korean': 'IMPORTANT: Generate the topic name in Korean (한국어). Use 2-5 Korean characters.'
+    }
+    
     def __init__(self, model_path: Optional[str] = None, use_ollama: bool = False, ollama_model: str = "qwen:7b"):
         """
         Initialize the LLM report generator
@@ -169,12 +180,10 @@ class LLMReportGenerator:
             sentiment = topic_data.get('sentiment_label', 'neutral')
             
             # Language-specific instructions
-            language_instruction = {
-                'Chinese': 'IMPORTANT: Generate the topic name in Chinese (中文). Use 2-4 Chinese characters.',
-                'Japanese': 'IMPORTANT: Generate the topic name in Japanese (日本語). Use 2-6 Japanese characters.',
-                'English': 'Generate the topic name in English. Use 2-3 words.',
-                'Korean': 'IMPORTANT: Generate the topic name in Korean (한국어). Use 2-5 Korean characters.'
-            }.get(language, 'Generate the topic name in English. Use 2-3 words.')
+            language_instruction = self.LANGUAGE_INSTRUCTIONS.get(
+                language, 
+                'Generate the topic name in English. Use 2-3 words.'
+            )
             
             # Create prompt for topic naming with language context
             prompt = f"""Analyze these player feedback samples in {language} and provide a concise topic name.
@@ -201,7 +210,7 @@ Topic name (in {language}, concise, no explanation):"""
             topic_name = topic_name.strip('"\'')
             
             # Fallback if response is too long or invalid
-            if len(topic_name) > 50:
+            if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH:
                 topic_name = self._extract_keywords(sentences)
             
             return topic_name

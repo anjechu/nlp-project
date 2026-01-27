@@ -83,8 +83,19 @@ Sentiment: {sentiment}
 
 Topic name (2-3 words only, no explanation):"""
             
-            # Generate response
-            response, _ = self.model.chat(self.tokenizer, prompt, history=None)
+            # Generate response using standard transformers interface
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            outputs = self.model.generate(
+                inputs.input_ids,
+                max_new_tokens=50,
+                temperature=0.7,
+                do_sample=True,
+                pad_token_id=self.tokenizer.pad_token_id
+            )
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract the response part (after the prompt)
+            response = response[len(prompt):].strip()
             
             # Extract clean topic name (remove any extra explanation)
             topic_name = response.strip().split('\n')[0].strip()
@@ -152,7 +163,19 @@ Number of players mentioning this: {density}
 
 Provide a concise insight summary (2-3 sentences):"""
             
-            response, _ = self.model.chat(self.tokenizer, prompt, history=None)
+            # Generate response using standard transformers interface
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            outputs = self.model.generate(
+                inputs.input_ids,
+                max_new_tokens=100,
+                temperature=0.7,
+                do_sample=True,
+                pad_token_id=self.tokenizer.pad_token_id
+            )
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract the response part (after the prompt)
+            response = response[len(prompt):].strip()
             return response.strip()
             
         except Exception as e:

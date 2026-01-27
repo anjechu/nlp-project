@@ -205,6 +205,7 @@ class ReportChartGenerator:
 # Test/example usage
 if __name__ == "__main__":
     import json
+    import tempfile
     
     # Create sample data
     sample_report = {
@@ -224,7 +225,9 @@ if __name__ == "__main__":
         }
     }
     
-    generator = ReportChartGenerator(output_dir='/tmp/charts')
+    # Use temporary directory for cross-platform compatibility
+    output_dir = os.path.join(tempfile.gettempdir(), 'charts')
+    generator = ReportChartGenerator(output_dir=output_dir)
     paths = generator.generate_all_charts(sample_report, 'cyberpunk_demo')
     
     print("Generated charts:")

@@ -407,10 +407,9 @@ class NLPApp(ctk.CTk):
             total = len(self.loaded_reports)
             
             for idx, (name, data) in enumerate(list(self.loaded_reports.items()), 1):
-                self.llm_status_label.configure(
-                    text=f"Enhancing {idx}/{total}: {name[:30]}..."
-                )
-                self.update_idletasks()
+                # Use thread-safe method to update GUI from background thread
+                self.after(0, lambda n=name, i=idx, t=total: 
+                    self.llm_status_label.configure(text=f"Enhancing {i}/{t}: {n[:30]}..."))
                 
                 # Generate enhanced report
                 enhanced_data = self.llm_generator.generate_enhanced_report(data, include_charts=True)
@@ -421,21 +420,21 @@ class NLPApp(ctk.CTk):
                 
                 self.log(f"✨ Enhanced report: {name}")
             
-            # Update display
-            self.display_report_summary()
-            self.llm_status_label.configure(text=f"Enhanced {enhanced_count} reports")
+            # Update display on main thread
+            self.after(0, self.display_report_summary)
+            self.after(0, lambda: self.llm_status_label.configure(text=f"Enhanced {enhanced_count} reports"))
             
-            tkinter.messagebox.showinfo("Enhancement Complete", 
-                                         f"Successfully enhanced {enhanced_count} reports with LLM-generated insights!")
+            self.after(0, lambda: tkinter.messagebox.showinfo("Enhancement Complete", 
+                                         f"Successfully enhanced {enhanced_count} reports with LLM-generated insights!"))
             
         except Exception as e:
             self.log(f"❌ LLM Enhancement Error: {str(e)}")
-            tkinter.messagebox.showerror("Enhancement Failed", 
-                                          f"Failed to enhance reports: {str(e)}")
-            self.llm_status_label.configure(text="Enhancement failed")
+            self.after(0, lambda: tkinter.messagebox.showerror("Enhancement Failed", 
+                                          f"Failed to enhance reports: {str(e)}"))
+            self.after(0, lambda: self.llm_status_label.configure(text="Enhancement failed"))
         
         finally:
-            self.btn_enhance_llm.configure(state="normal")
+            self.after(0, lambda: self.btn_enhance_llm.configure(state="normal"))
 
     def generate_prompt_logic(self):
         """

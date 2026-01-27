@@ -958,15 +958,21 @@ class AnalysisReportGenerator:
         }
         
         for topic in topics:
-            # Determine primary language from cultural distribution
-            dist = topic.get('cultural_distribution', {})
-            if not dist:
-                continue
-                
-            primary_lang = max(dist.items(), key=lambda x: x[1])[0] if dist else None
-            culture_name = self._get_culture_name(primary_lang) if primary_lang else None
+            # Get language from source_language (Map-Reduce) or cultural_distribution (legacy)
+            lang_code = topic.get('source_language')
             
-            if culture_name in by_language:
+            if lang_code:
+                # Map-Reduce path: use source_language directly
+                culture_name = self._get_culture_name(lang_code)
+            else:
+                # Legacy path: use cultural_distribution
+                dist = topic.get('cultural_distribution', {})
+                if not dist:
+                    continue
+                primary_lang = max(dist.items(), key=lambda x: x[1])[0] if dist else None
+                culture_name = self._get_culture_name(primary_lang) if primary_lang else None
+            
+            if culture_name and culture_name in by_language:
                 sentiment = topic.get('sentiment_label', 'neutral').lower()
                 # Use English name for consistency in executive summary and clean it
                 topic_name = topic.get('topic_name', f"Topic {topic.get('topic_id')}")
@@ -1247,9 +1253,14 @@ class AnalysisReportGenerator:
         # Aggregate cultural data
         culture_topics = {}
         for topic in topics:
-            dist = topic.get('cultural_distribution', {})
-            for lang, count in dist.items():
-                culture = self._get_culture_name(lang)
+            # Get language from source_language (Map-Reduce) or cultural_distribution (legacy)
+            lang_code = topic.get('source_language')
+            
+            if lang_code:
+                # Map-Reduce path: use source_language directly
+                culture = self._get_culture_name(lang_code)
+                count = topic.get('density', 0)
+                
                 if culture not in culture_topics:
                     culture_topics[culture] = {'total': 0, 'positive': 0, 'negative': 0, 'topics': []}
                 
@@ -1265,6 +1276,26 @@ class AnalysisReportGenerator:
                     'count': count,
                     'sentiment': sentiment
                 })
+            else:
+                # Legacy path: use cultural_distribution
+                dist = topic.get('cultural_distribution', {})
+                for lang, count in dist.items():
+                    culture = self._get_culture_name(lang)
+                    if culture not in culture_topics:
+                        culture_topics[culture] = {'total': 0, 'positive': 0, 'negative': 0, 'topics': []}
+                    
+                    culture_topics[culture]['total'] += count
+                    sentiment = topic.get('sentiment_label', '').lower()
+                    if sentiment == 'positive':
+                        culture_topics[culture]['positive'] += count
+                    elif sentiment == 'negative':
+                        culture_topics[culture]['negative'] += count
+                    
+                    culture_topics[culture]['topics'].append({
+                        'name': self._clean_topic_name(topic.get('topic_name', f"Topic {topic.get('topic_id')}")),
+                        'count': count,
+                        'sentiment': sentiment
+                    })
         
         # Display cultural comparison
         for culture, data in sorted(culture_topics.items(), key=lambda x: x[1]['total'], reverse=True):

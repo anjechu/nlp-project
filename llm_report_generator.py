@@ -181,7 +181,10 @@ Representative feedback:
 Additional samples:
 {chr(10).join(f'- {s}' for s in sample_texts)}
 
-Generate a concise English topic name (2-3 words, NO bullets, NO numbers, NO explanations):"""
+IMPORTANT: Provide ONLY an English topic name (2-3 words). NO Chinese, NO Japanese, NO Korean. Use English only!
+Examples: "Art Style", "Gameplay Balance", "Audio Quality"
+
+English topic name:"""
             
             # Query LLM
             response = self._query_llm(prompt, max_tokens=20)
@@ -195,6 +198,12 @@ Generate a concise English topic name (2-3 words, NO bullets, NO numbers, NO exp
             # Remove "Line 1:" or similar artifacts
             if ':' in topic_name and len(topic_name.split(':')[0]) < 10:
                 topic_name = topic_name.split(':', 1)[1].strip()
+            
+            # Check if it's actually English (basic check for non-Latin characters)
+            if any(ord(c) > 127 for c in topic_name):
+                # Contains non-Latin characters, use fallback
+                print(f"⚠️ Non-English topic name detected: {topic_name}, using fallback")
+                topic_name = self._extract_keywords(sentences)
             
             # Fallback if response is too long or invalid
             if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH or len(topic_name) < 2:

@@ -1339,12 +1339,11 @@ class AnalysisReportGenerator:
     def _generate_topics_section(self, topics: List[Dict], is_llm: bool) -> str:
         """Generate detailed topics section organized by language with hover UI"""
         
-        # Group topics by primary language
+        # Organize topics by language - ONLY Chinese, Japanese, English (no "Other")
         by_language = {
             'Chinese': [],
             'Japanese': [],
-            'English': [],
-            'Other': []
+            'English': []
         }
         
         for topic in topics:
@@ -1356,37 +1355,37 @@ class AnalysisReportGenerator:
                 for sample in samples:
                     lang = sample.get('language', '')
                     culture_name = self._get_culture_name(lang)
-                    if culture_name not in lang_count:
-                        lang_count[culture_name] = 0
-                    lang_count[culture_name] += 1
+                    if culture_name in by_language:  # Only count main languages
+                        if culture_name not in lang_count:
+                            lang_count[culture_name] = 0
+                        lang_count[culture_name] += 1
                 
-                # Get primary language
+                # Get primary language if it's one of the main three
                 if lang_count:
                     primary_lang = max(lang_count.items(), key=lambda x: x[1])[0]
-                    if primary_lang in by_language:
-                        by_language[primary_lang].append(topic)
-                    else:
-                        by_language['Other'].append(topic)
-                else:
-                    by_language['Other'].append(topic)
+                    by_language[primary_lang].append(topic)
+                # Skip if no main language found (no "Other" category)
             else:
-                # Fallback: use cultural_distribution
-                dist = topic.get('cultural_distribution', {})
-                if dist:
-                    primary_code = max(dist.items(), key=lambda x: x[1])[0]
-                    primary_lang = self._get_culture_name(primary_code)
-                    if primary_lang in by_language:
-                        by_language[primary_lang].append(topic)
-                    else:
-                        by_language['Other'].append(topic)
+                # Fallback: use source_language or cultural_distribution
+                lang_code = topic.get('source_language')
+                if lang_code:
+                    culture_name = self._get_culture_name(lang_code)
+                    if culture_name in by_language:
+                        by_language[culture_name].append(topic)
                 else:
-                    by_language['Other'].append(topic)
+                    dist = topic.get('cultural_distribution', {})
+                    if dist:
+                        primary_code = max(dist.items(), key=lambda x: x[1])[0]
+                        primary_lang = self._get_culture_name(primary_code)
+                        if primary_lang in by_language:
+                            by_language[primary_lang].append(topic)
+                    # Skip if not in main languages (no "Other" category)
         
         html = """
             <div class="section">
                 <h2>🎯 Detailed Topic Analysis</h2>
                 <p style="margin-bottom: 30px; color: #b0b0b0;">
-                    In-depth analysis of each topic, organized by language. Topics are named in their original language for authenticity.
+                    In-depth analysis of each topic, organized by language. All topics are named in English for consistency.
                 </p>
                 
                 <style>
@@ -1450,14 +1449,6 @@ class AnalysisReportGenerator:
                     <div class="language-tab active" data-lang="chinese" onclick="switchLanguage('chinese')">🇨🇳 中文</div>
                     <div class="language-tab" data-lang="japanese" onclick="switchLanguage('japanese')">🇯🇵 日本語</div>
                     <div class="language-tab" data-lang="english" onclick="switchLanguage('english')">🇬🇧 English</div>
-"""
-        
-        if by_language['Other']:
-            html += """
-                    <div class="language-tab" data-lang="other" onclick="switchLanguage('other')">🌐 Other</div>
-"""
-        
-        html += """
                 </div>
                 
                 <script>
@@ -1479,14 +1470,11 @@ class AnalysisReportGenerator:
                 </script>
 """
         
-        # Generate content for each language
+        # Generate content for each language (only Chinese, Japanese, English)
         for lang_key, lang_label in [('chinese', '中文 (Chinese)'), ('japanese', '日本語 (Japanese)'), 
-                                      ('english', 'English'), ('other', 'Other Languages')]:
-            lang_name = {'chinese': 'Chinese', 'japanese': 'Japanese', 'english': 'English', 'other': 'Other'}[lang_key]
+                                      ('english', 'English')]:
+            lang_name = {'chinese': 'Chinese', 'japanese': 'Japanese', 'english': 'English'}[lang_key]
             lang_topics = by_language.get(lang_name, [])
-            
-            if not lang_topics and lang_key != 'other':
-                continue
             
             active_class = 'active' if lang_key == 'chinese' else ''
             

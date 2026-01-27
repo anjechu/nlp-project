@@ -217,23 +217,32 @@ English topic name:"""
             return f"Topic {topic_id}"
     
     def _extract_keywords(self, sentences: List[str]) -> str:
-        """Fallback method to extract keywords if LLM fails"""
+        """
+        Fallback method to extract English keywords if LLM fails.
+        Only uses Latin characters to ensure English output.
+        """
         # Simple keyword extraction based on frequency
         words = []
         for s in sentences[:3]:
-            words.extend(s.split())
+            # Split and filter to only include words with Latin characters
+            for word in s.split():
+                # Only keep words that are mostly Latin characters (English)
+                latin_chars = sum(1 for c in word if ord(c) < 128)
+                if latin_chars > len(word) * 0.8 and len(word) > 2:  # 80% Latin chars and length > 2
+                    words.append(word)
         
         # Filter common words and take most frequent
         word_freq = Counter(words)
         # Remove very common words
-        common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for'}
-        filtered = {w: c for w, c in word_freq.items() if w.lower() not in common_words}
+        common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for', 'and', 'but', 'with', 'this', 'that', 'from'}
+        filtered = {w: c for w, c in word_freq.items() if w.lower() not in common_words and len(w) > 2}
         
         if filtered:
             top_words = sorted(filtered.items(), key=lambda x: x[1], reverse=True)[:2]
             return ' '.join(w[0].title() for w in top_words)
         
-        return "General Feedback"
+        # Ultimate fallback - return generic English name
+        return "Player Feedback"
     
     def generate_topic_summary(self, topic_data: Dict, topic_name: str) -> str:
         """

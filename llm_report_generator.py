@@ -213,8 +213,7 @@ English topic name:"""
             # Check for overly generic names and force re-extraction
             generic_names = {
                 'player feedback', 'game feedback', 'user feedback', 'general feedback',
-                'player opinion', 'game opinion', 'user opinion', 'general opinion',
-                'feedback', 'opinion', 'comment', 'review'
+                'player opinion', 'game opinion', 'user opinion', 'general opinion'
             }
             if topic_name.lower() in generic_names:
                 print(f"⚠️ Generic topic name detected: {topic_name}, extracting specific keywords")
@@ -260,15 +259,16 @@ English topic name:"""
             'so', 'as', 'at', 'by', 'on', 'or', 'if', 'than', 'then', 'when', 'where', 'why', 'how',
             'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
             'very', 'really', 'just', 'also', 'too', 'only', 'even', 'much', 'many', 'well',
-            'game', 'games', 'play', 'playing', 'played', 'player', 'players',  # Generic game words
+            'get', 'got', 'make', 'made', 'like', 'good', 'bad', 'better', 'best', 'worst',
+            'game', 'games', 'playing', 'played',  # Keep "play" and "player" if they combine with others
             'feedback', 'comment', 'review', 'opinion'  # Generic feedback words
         }
         
-        # Filter out common/generic words and get most frequent meaningful words
+        # First pass: Try to get specific words (length > 3)
         filtered = {w: c for w, c in word_freq.items() if w not in common_words and len(w) > 3}
         
         if filtered:
-            # Get top 2-3 most frequent specific words
+            # Get top 2 most frequent specific words
             top_words = sorted(filtered.items(), key=lambda x: x[1], reverse=True)[:2]
             keywords = ' '.join(w[0].title() for w in top_words)
             
@@ -276,12 +276,26 @@ English topic name:"""
             if len(keywords) > 4:  # At least something meaningful
                 return keywords
         
-        # If still no good keywords, try to extract noun-like words (capitalized or longer words)
-        potential_topics = [w.title() for w in words if len(w) > 4 and w not in common_words]
+        # Second pass: Be more lenient with word length (> 2) but still filter common words
+        filtered_lenient = {w: c for w, c in word_freq.items() if w not in common_words and len(w) > 2}
+        
+        if filtered_lenient:
+            top_words = sorted(filtered_lenient.items(), key=lambda x: x[1], reverse=True)[:2]
+            keywords = ' '.join(w[0].title() for w in top_words)
+            if len(keywords) > 3:
+                return keywords
+        
+        # Third pass: Extract any meaningful content words (nouns, verbs, adjectives)
+        # Look for longer words or capitalized words that might be names/concepts
+        potential_topics = []
+        for w in words:
+            if w not in common_words and len(w) > 3:
+                potential_topics.append(w.title())
+        
         if potential_topics:
-            # Use the first few unique ones
-            unique_topics = []
+            # Remove duplicates while preserving order
             seen = set()
+            unique_topics = []
             for topic in potential_topics:
                 if topic.lower() not in seen and len(unique_topics) < 2:
                     unique_topics.append(topic)
@@ -289,8 +303,13 @@ English topic name:"""
             if unique_topics:
                 return ' '.join(unique_topics)
         
-        # Last resort - return topic ID based name
-        return "Unclassified Topic"
+        # Fourth pass: Just get ANY words that aren't super common
+        any_words = [w.title() for w in words if w not in common_words][:2]
+        if any_words:
+            return ' '.join(any_words)
+        
+        # Absolute last resort - use a more descriptive generic name
+        return "Discussion Topic"
     
     def generate_topic_summary(self, topic_data: Dict, topic_name: str) -> str:
         """

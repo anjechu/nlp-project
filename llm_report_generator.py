@@ -668,6 +668,123 @@ Summary:"""
                 'max': float(np.max(sentiment_scores)) if sentiment_scores else 0
             }
         }
+    
+    def process_game_language_independently(self, nlp_result: Dict, game_name: str, language: str) -> Dict:
+        """
+        MAP PHASE: Process a single [game + language] combination independently.
+        
+        This is Phase 1 of the Map-Reduce architecture. By processing each combination
+        separately, we prevent LLM context overflow that was causing Chinese players'
+        positive topics to be forgotten.
+        
+        Args:
+            nlp_result: NLP analysis result for a single game+language combination
+            game_name: Name of the game (e.g., "bf6", "silksong")
+            language: Language of the reviews (e.g., "chinese", "japanese", "english")
+            
+        Returns:
+            Enhanced report with dual-language names and summaries for this specific combination
+        """
+        print(f"\n{'='*80}")
+        print(f"🔍 MAP PHASE: Processing [{game_name}] + [{language}] independently")
+        print(f"{'='*80}")
+        
+        # Set language context for this specific combination
+        language_display = self.LANG_MAP.get(language.lower(), language.capitalize())
+        
+        print(f"📊 Input: {len(nlp_result.get('topics', []))} topics from {game_name} ({language_display})")
+        
+        # Process with language context to ensure proper naming
+        enhanced = self.generate_enhanced_report(
+            nlp_result, 
+            game_name=game_name, 
+            language=language_display,
+            include_charts=False,  # Charts generated later in REDUCE phase
+            include_cultural_analysis=False  # Cross-cultural done in REDUCE phase
+        )
+        
+        # Add metadata for tracking
+        enhanced['map_metadata'] = {
+            'game_name': game_name,
+            'language': language,
+            'processed_independently': True,
+            'original_topic_count': len(nlp_result.get('topics', [])),
+            'valuable_topic_count': len(enhanced.get('topics', []))
+        }
+        
+        print(f"✅ MAP COMPLETE: {len(enhanced.get('topics', []))} valuable topics extracted")
+        print(f"   (Filtered from {len(nlp_result.get('topics', []))} original topics)")
+        
+        return enhanced
+    
+    def aggregate_map_results(self, map_results: List[Dict]) -> Dict:
+        """
+        REDUCE PHASE: Aggregate independently processed [game + language] results.
+        
+        This is Phase 2 of the Map-Reduce architecture. Takes the cleaned, 
+        LLM-enhanced results from each combination and merges them intelligently.
+        
+        Args:
+            map_results: List of enhanced reports from MAP phase
+            
+        Returns:
+            Single aggregated report with all valuable topics
+        """
+        print(f"\n{'='*80}")
+        print(f"🔄 REDUCE PHASE: Aggregating {len(map_results)} independently processed results")
+        print(f"{'='*80}")
+        
+        # Collect all valuable topics with their metadata
+        all_topics = []
+        all_stats = {
+            'total_comments': 0,
+            'total_valid': 0,
+            'games_processed': set(),
+            'languages_processed': set()
+        }
+        
+        topic_id_counter = 1
+        
+        for result in map_results:
+            metadata = result.get('map_metadata', {})
+            game = metadata.get('game_name', 'Unknown')
+            lang = metadata.get('language', 'unknown')
+            
+            all_stats['games_processed'].add(game)
+            all_stats['languages_processed'].add(lang)
+            
+            # Add topics with source tracking
+            for topic in result.get('topics', []):
+                aggregated_topic = {
+                    **topic,
+                    'topic_id': topic_id_counter,
+                    'source_game': game,
+                    'source_language': lang
+                }
+                all_topics.append(aggregated_topic)
+                topic_id_counter += 1
+            
+            # Aggregate statistics
+            stats = result.get('statistics', {})
+            all_stats['total_comments'] += stats.get('total', 0)
+            all_stats['total_valid'] += stats.get('valid', 0)
+        
+        # Convert sets to lists for JSON serialization
+        all_stats['games_processed'] = list(all_stats['games_processed'])
+        all_stats['languages_processed'] = list(all_stats['languages_processed'])
+        
+        print(f"📊 REDUCE COMPLETE:")
+        print(f"   • Total valuable topics: {len(all_topics)}")
+        print(f"   • Games: {', '.join(all_stats['games_processed'])}")
+        print(f"   • Languages: {', '.join(all_stats['languages_processed'])}")
+        
+        return {
+            'topics': all_topics,
+            'statistics': all_stats,
+            'llm_enhanced': True,
+            'map_reduce_processed': True,
+            'total_valuable_topics': len(all_topics)
+        }
 
 
 # Standalone usage example

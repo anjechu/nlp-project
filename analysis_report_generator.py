@@ -275,6 +275,114 @@ class AnalysisReportGenerator:
                 'cross_cultural': False
             }
     
+    def generate_analysis_report_with_map_reduce(self, nlp_data_list: List[Dict], output_dir: str = "analysis", report_filenames: Optional[List[str]] = None) -> str:
+        """
+        Generate analysis report using MAP-REDUCE architecture to prevent context overflow.
+        
+        This is the NEW recommended approach for multi-game/multi-language analysis:
+        - PHASE 1 (MAP): Process each [game + language] independently with dedicated LLM context
+        - PHASE 2 (REDUCE): Aggregate all valuable topics from independent processing
+        - PHASE 3 (GLOBAL): Generate final cross-cultural report with charts
+        
+        Args:
+            nlp_data_list: List of NLP dicts, each representing one [game + language] combination
+            output_dir: Directory to save analysis reports
+            report_filenames: List of original report filenames (format: Report_comments_game_lang_timestamp)
+            
+        Returns:
+            Path to generated HTML report
+        """
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        print(f"\n{'='*80}")
+        print(f"🚀 STARTING MAP-REDUCE ANALYSIS")
+        print(f"{'='*80}")
+        print(f"📊 Input: {len(nlp_data_list)} game+language combinations")
+        
+        if not self.llm_generator or not self.llm_generator.llm_available:
+            print("⚠️ WARNING: LLM not available, falling back to standard aggregation")
+            return self.generate_analysis_report(nlp_data_list, output_dir, report_filenames)
+        
+        # Parse filenames to extract game and language info
+        games_and_languages = []
+        if report_filenames:
+            for filename in report_filenames:
+                game_info = self._parse_filename(filename)
+                games_and_languages.append(game_info)
+                print(f"   • {game_info['game']} ({game_info['language']})")
+        
+        # PHASE 1: MAP - Process each [game + language] independently
+        print(f"\n{'🗺️ '*20}")
+        print(f"PHASE 1: MAP - Independent Processing")
+        print(f"{'🗺️ '*20}")
+        
+        map_results = []
+        for idx, (nlp_data, game_info) in enumerate(zip(nlp_data_list, games_and_languages), 1):
+            print(f"\n[{idx}/{len(nlp_data_list)}] Processing: {game_info['game']} - {game_info['language']}")
+            
+            enhanced = self.llm_generator.process_game_language_independently(
+                nlp_data,
+                game_name=game_info['game'],
+                language=game_info['language']
+            )
+            map_results.append(enhanced)
+        
+        # PHASE 2: REDUCE - Aggregate results
+        print(f"\n{'🔄 '*20}")
+        print(f"PHASE 2: REDUCE - Aggregation")
+        print(f"{'🔄 '*20}")
+        
+        aggregated_data = self.llm_generator.aggregate_map_results(map_results)
+        
+        # Add back the source file information for reference
+        aggregated_data['source_files'] = report_filenames if report_filenames else []
+        aggregated_data['games_analyzed'] = aggregated_data['statistics']['games_processed']
+        
+        # PHASE 3: GLOBAL - Generate final report with cross-cultural insights
+        print(f"\n{'🌏 '*20}")
+        print(f"PHASE 3: GLOBAL - Final Report Generation")
+        print(f"{'🌏 '*20}")
+        
+        # Generate charts for all valuable topics
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = f"analysis_mapreduce_{timestamp}"
+        
+        print(f"📈 Generating charts from {len(aggregated_data.get('topics', []))} valuable topics...")
+        chart_images = self._generate_chart_images(aggregated_data, base_name, output_dir)
+        
+        # Generate cross-cultural summary for all topics
+        if self.llm_generator.llm_available:
+            topics = aggregated_data.get('topics', [])
+            if topics:
+                print(f"🌏 Generating cross-cultural summary...")
+                cultural_summary = self.llm_generator._generate_cultural_summary(topics)
+                aggregated_data['cultural_summary'] = cultural_summary
+        
+        # Generate HTML report
+        print(f"📄 Creating HTML report...")
+        html_content = self._generate_html_report(aggregated_data, chart_images, aggregated_data)
+        
+        # Save report
+        html_path = os.path.join(output_dir, f"{base_name}.html")
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        # Save enhanced JSON for reference
+        json_path = os.path.join(output_dir, f"{base_name}.json")
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(aggregated_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"\n{'='*80}")
+        print(f"✅ MAP-REDUCE ANALYSIS COMPLETE")
+        print(f"{'='*80}")
+        print(f"📄 HTML Report: {html_path}")
+        print(f"📊 JSON Data: {json_path}")
+        print(f"🎯 Total Valuable Topics: {len(aggregated_data.get('topics', []))}")
+        print(f"{'='*80}\n")
+        
+        return html_path
+    
     def _generate_chart_images(self, enhanced_data: Dict, base_name: str, output_dir: str) -> Dict:
         """Generate charts and return as base64 encoded strings for HTML embedding"""
         chart_images = {}

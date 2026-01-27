@@ -493,12 +493,13 @@ class NLPApp(ctk.CTk):
                     text=f"Aggregating {len(all_reports)} reports into unified analysis..."
                 ))
             
-            # Generate ONE comprehensive cross-cultural analysis from ALL reports
+            # Generate comprehensive cross-cultural analysis using MAP-REDUCE
             # Pass report filenames for parsing game/language metadata
-            html_path = self.analysis_report_generator.generate_analysis_report(
+            # Use Map-Reduce approach to prevent LLM context overflow
+            html_path = self.analysis_report_generator.generate_analysis_report_with_map_reduce(
                 all_reports,  # Pass all reports as a list
                 output_dir="analysis",
-                report_filenames=report_names  # Pass filenames for parsing
+                report_filenames=report_names  # Pass filenames for parsing game+language info
             )
             
             self.log(f"🌏 Unified cross-cultural analysis generated: {html_path}")
@@ -511,8 +512,11 @@ class NLPApp(ctk.CTk):
             ))
             
             # Show completion message
-            message = f"Successfully generated unified cross-cultural analysis!\n\n"
-            message += f"📊 Reports Analyzed: {len(all_reports)}\n"
+            message = f"Successfully generated cross-cultural analysis using MAP-REDUCE architecture!\n\n"
+            message += f"🗺️ MAP PHASE: Each [game + language] processed independently\n"
+            message += f"🔄 REDUCE PHASE: Results aggregated intelligently\n"
+            message += f"🌏 GLOBAL PHASE: Cross-cultural insights generated\n\n"
+            message += f"📊 Game+Language Combinations Analyzed: {len(all_reports)}\n"
             message += f"   {', '.join(name[:30] for name in report_names[:5])}\n"
             if len(report_names) > 5:
                 message += f"   ... and {len(report_names) - 5} more\n"
@@ -520,8 +524,11 @@ class NLPApp(ctk.CTk):
             message += f"📁 Analysis report (HTML): {os.path.basename(html_path)}\n"
             message += "📊 Chart images: analysis/*.png\n"
             message += "📄 Analysis data (JSON): analysis/*.json\n\n"
-            message += "⚠️ Note: Original NLP reports in 'reports/' folder remain untouched.\n"
-            message += "         All reports have been aggregated into ONE comprehensive analysis."
+            message += "✅ Benefits of MAP-REDUCE:\n"
+            message += "   • Prevents LLM context overflow\n"
+            message += "   • Preserves positive topics from ALL languages\n"
+            message += "   • More accurate topic naming per language\n"
+            message += "   • Better filtering of valuable topics"
             
             self.after(0, lambda: tkinter.messagebox.showinfo("Analysis Complete", message))
             

@@ -20,6 +20,7 @@ except ImportError:
 try:
     from llm_report_generator import LLMReportGenerator
     from chart_generator import ReportChartGenerator
+    from analysis_report_generator import AnalysisReportGenerator
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
@@ -58,6 +59,7 @@ class NLPApp(ctk.CTk):
         # Initialize LLM report generator if available
         self.llm_generator = None
         self.chart_generator = None
+        self.analysis_report_generator = None
         self.use_ollama = False  # Can be configured via settings
         if LLM_AVAILABLE:
             try:
@@ -80,6 +82,14 @@ class NLPApp(ctk.CTk):
                     # Fallback to HuggingFace
                     self.llm_generator = LLMReportGenerator(use_ollama=False)
                     print("✅ LLM Report Generator initialized (HuggingFace)")
+                
+                # Initialize analysis report generator
+                self.analysis_report_generator = AnalysisReportGenerator(
+                    llm_generator=self.llm_generator,
+                    chart_generator=self.chart_generator
+                )
+                print("✅ Analysis Report Generator initialized")
+                
             except Exception as e:
                 print(f"⚠️ Failed to initialize LLM: {e}")
                 self.llm_generator = None
@@ -169,10 +179,10 @@ class NLPApp(ctk.CTk):
                                       corner_radius=8, border_width=1, border_color=THEME_BORDER)
         control_frame.pack(fill="x", padx=10, pady=5)
         
-        # Add button to enhance reports with LLM
+        # Add button to generate cross-cultural analysis
         self.btn_enhance_llm = ctk.CTkButton(
             control_frame,
-            text="✨ Enhance with LLM (Generate Topic Names & Insights)",
+            text="🌏 Generate Cross-Cultural Analysis Report",
             command=self.enhance_reports_with_llm,
             fg_color=THEME_ACCENT_VIOLET,
             hover_color=THEME_ACCENT_VIOLET_HOVER,
@@ -442,82 +452,76 @@ class NLPApp(ctk.CTk):
         self.report_box.insert("0.0", text)
     
     def enhance_reports_with_llm(self):
-        """Enhance all loaded reports with LLM-generated topic names and insights"""
-        if not self.llm_generator:
-            tkinter.messagebox.showwarning("LLM Not Available", 
-                                            "LLM report generator is not initialized. Please check your setup.")
+        """Generate comprehensive cross-cultural analysis report"""
+        if not self.analysis_report_generator:
+            tkinter.messagebox.showwarning("Analysis Generator Not Available", 
+                                            "Analysis report generator is not initialized. Please check your setup.")
             return
         
         if not self.loaded_reports:
             tkinter.messagebox.showwarning("No Data", 
-                                            "Please load or generate reports first before enhancing with LLM.")
+                                            "Please load or generate NLP reports first before creating analysis.")
             return
         
-        # Run enhancement in background thread
+        # Run analysis generation in background thread
         self.btn_enhance_llm.configure(state="disabled")
-        self.llm_status_label.configure(text="Enhancing reports with LLM...")
-        threading.Thread(target=self._run_llm_enhancement, daemon=True).start()
+        self.llm_status_label.configure(text="Generating cross-cultural analysis...")
+        threading.Thread(target=self._run_analysis_generation, daemon=True).start()
     
-    def _run_llm_enhancement(self):
-        """Background task to enhance reports with LLM"""
+    def _run_analysis_generation(self):
+        """Background task to generate analysis reports"""
         try:
-            enhanced_count = 0
+            generated_count = 0
             total = len(self.loaded_reports)
+            generated_paths = []
             
-            for idx, (name, data) in enumerate(list(self.loaded_reports.items()), 1):
+            for idx, (name, nlp_data) in enumerate(list(self.loaded_reports.items()), 1):
                 # Use thread-safe method to update GUI from background thread
                 self.after(0, lambda n=name, i=idx, t=total: 
-                    self.llm_status_label.configure(text=f"Enhancing {i}/{t}: {n[:30]}..."))
+                    self.llm_status_label.configure(text=f"Analyzing {i}/{t}: {n[:30]}..."))
                 
-                # Generate enhanced report
-                enhanced_data = self.llm_generator.generate_enhanced_report(data, include_charts=True, include_cultural_analysis=True)
+                # Generate comprehensive analysis report (keeps NLP data untouched)
+                html_path = self.analysis_report_generator.generate_analysis_report(nlp_data, output_dir="analysis")
                 
-                # Update the loaded report
-                self.loaded_reports[name] = enhanced_data
-                enhanced_count += 1
+                generated_paths.append(html_path)
+                generated_count += 1
                 
-                # Save enhanced report to file
-                enhanced_filename = name.replace('.json', '_enhanced.json')
-                enhanced_path = os.path.join('reports', enhanced_filename)
-                try:
-                    with open(enhanced_path, 'w', encoding='utf-8') as f:
-                        json.dump(enhanced_data, f, ensure_ascii=False, indent=2)
-                    self.log(f"✨ Enhanced report saved: {enhanced_path}")
-                except Exception as e:
-                    self.log(f"⚠️ Could not save enhanced report: {e}")
-                
-                # Generate chart images if chart generator is available
-                if self.chart_generator and 'charts' in enhanced_data:
-                    try:
-                        # Generate all charts for this report
-                        base_name = name.replace('.json', '').replace('Report_', '')
-                        chart_paths = self.chart_generator.generate_all_charts(enhanced_data, base_name)
-                        self.log(f"📊 Generated {len(chart_paths)} charts in charts/ directory")
-                        
-                        # Store chart paths in enhanced data
-                        enhanced_data['chart_files'] = chart_paths
-                        self.loaded_reports[name] = enhanced_data
-                    except Exception as e:
-                        self.log(f"⚠️ Chart generation error: {e}")
+                self.log(f"🌏 Cross-cultural analysis generated: {html_path}")
             
-            # Update display on main thread
+            # Update display (show original NLP data, not modified)
             self.after(0, self.display_report_summary)
-            self.after(0, lambda: self.llm_status_label.configure(text=f"Enhanced {enhanced_count} reports"))
+            self.after(0, lambda: self.llm_status_label.configure(text=f"Generated {generated_count} analysis reports"))
             
             # Show completion message with file locations
-            message = f"Successfully enhanced {enhanced_count} reports!\n\n"
-            message += "📁 Enhanced reports saved to: reports/*_enhanced.json\n"
-            if self.chart_generator:
-                message += "📊 Charts saved to: charts/*.png\n"
-            message += "\nView the Insights Report tab to see the enhanced analysis."
+            paths_list = '\n'.join([f"  • {os.path.basename(p)}" for p in generated_paths[:5]])
+            if len(generated_paths) > 5:
+                paths_list += f"\n  ... and {len(generated_paths) - 5} more"
             
-            self.after(0, lambda: tkinter.messagebox.showinfo("Enhancement Complete", message))
+            message = f"Successfully generated {generated_count} cross-cultural analysis reports!\n\n"
+            message += "📁 Analysis reports (HTML): analysis/\n"
+            message += "📊 Chart images: analysis/*.png\n"
+            message += "📄 Analysis data (JSON): analysis/*.json\n\n"
+            message += "Generated files:\n" + paths_list + "\n\n"
+            message += "⚠️ Note: Original NLP reports in 'reports/' folder remain untouched."
+            
+            self.after(0, lambda: tkinter.messagebox.showinfo("Analysis Complete", message))
+            
+            # Offer to open the first analysis report
+            if generated_paths:
+                import webbrowser
+                try:
+                    webbrowser.open('file://' + os.path.abspath(generated_paths[0]))
+                    self.log(f"📖 Opened analysis report in browser")
+                except Exception as e:
+                    self.log(f"⚠️ Could not open browser: {e}")
             
         except Exception as e:
-            self.log(f"❌ LLM Enhancement Error: {str(e)}")
-            self.after(0, lambda: tkinter.messagebox.showerror("Enhancement Failed", 
-                                          f"Failed to enhance reports: {str(e)}"))
-            self.after(0, lambda: self.llm_status_label.configure(text="Enhancement failed"))
+            self.log(f"❌ Analysis Generation Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.after(0, lambda: tkinter.messagebox.showerror("Analysis Failed", 
+                                          f"Failed to generate analysis: {str(e)}"))
+            self.after(0, lambda: self.llm_status_label.configure(text="Analysis failed"))
         
         finally:
             self.after(0, lambda: self.btn_enhance_llm.configure(state="normal"))

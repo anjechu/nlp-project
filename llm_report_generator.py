@@ -170,7 +170,7 @@ class LLMReportGenerator:
             sentiment = topic_data.get('sentiment_label', 'neutral')
             
             # Create prompt for English topic naming only
-            prompt = f"""Analyze these player feedback samples and provide a concise English topic name.
+            prompt = f"""Analyze these player feedback samples and provide a SPECIFIC English topic name.
 
 Game: {game_name if game_name else 'Unknown Game'}
 Sentiment: {sentiment}
@@ -181,8 +181,13 @@ Representative feedback:
 Additional samples:
 {chr(10).join(f'- {s}' for s in sample_texts)}
 
-IMPORTANT: Provide ONLY an English topic name (2-3 words). NO Chinese, NO Japanese, NO Korean. Use English only!
-Examples: "Art Style", "Gameplay Balance", "Audio Quality"
+IMPORTANT: 
+- Provide ONLY a SPECIFIC English topic name (2-3 words)
+- NO Chinese, NO Japanese, NO Korean - Use English only!
+- Be SPECIFIC to the feedback content - NOT generic!
+- FORBIDDEN generic names: "Player Feedback", "Game Feedback", "User Feedback", "General Feedback"
+- Good examples: "Art Style", "Gameplay Balance", "Audio Quality", "Loading Times", "Boss Difficulty"
+- Bad examples: "Player Feedback", "Game Issues", "General Opinion"
 
 English topic name:"""
             
@@ -205,6 +210,16 @@ English topic name:"""
                 print(f"⚠️ Non-English topic name detected: {topic_name}, using fallback")
                 topic_name = self._extract_keywords(sentences)
             
+            # Check for overly generic names and force re-extraction
+            generic_names = {
+                'player feedback', 'game feedback', 'user feedback', 'general feedback',
+                'player opinion', 'game opinion', 'user opinion', 'general opinion',
+                'feedback', 'opinion', 'comment', 'review'
+            }
+            if topic_name.lower() in generic_names:
+                print(f"⚠️ Generic topic name detected: {topic_name}, extracting specific keywords")
+                topic_name = self._extract_keywords(sentences)
+            
             # Fallback if response is too long or invalid
             if len(topic_name) > self.MAX_TOPIC_NAME_LENGTH or len(topic_name) < 2:
                 topic_name = self._extract_keywords(sentences)
@@ -220,29 +235,62 @@ English topic name:"""
         """
         Fallback method to extract English keywords if LLM fails.
         Only uses Latin characters to ensure English output.
+        Tries to extract meaningful, specific keywords from the content.
         """
         # Simple keyword extraction based on frequency
         words = []
-        for s in sentences[:3]:
+        for s in sentences[:5]:  # Look at more sentences for better keywords
             # Split and filter to only include words with Latin characters
             for word in s.split():
                 # Only keep words that are mostly Latin characters (English)
                 latin_chars = sum(1 for c in word if ord(c) < 128)
                 if latin_chars > len(word) * 0.8 and len(word) > 2:  # 80% Latin chars and length > 2
-                    words.append(word)
+                    # Clean punctuation
+                    word_clean = word.strip('.,!?;:()[]{}"\'-').lower()
+                    if len(word_clean) > 2:
+                        words.append(word_clean)
         
         # Filter common words and take most frequent
         word_freq = Counter(words)
-        # Remove very common words
-        common_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for', 'and', 'but', 'with', 'this', 'that', 'from'}
-        filtered = {w: c for w, c in word_freq.items() if w.lower() not in common_words and len(w) > 2}
+        # Expanded list of common/generic words to filter out
+        common_words = {
+            'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for', 'and', 'but', 
+            'with', 'this', 'that', 'from', 'has', 'have', 'had', 'will', 'would', 'could', 'should',
+            'can', 'may', 'might', 'must', 'its', 'it', 'be', 'been', 'being', 'not', 'no', 'yes',
+            'so', 'as', 'at', 'by', 'on', 'or', 'if', 'than', 'then', 'when', 'where', 'why', 'how',
+            'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
+            'very', 'really', 'just', 'also', 'too', 'only', 'even', 'much', 'many', 'well',
+            'game', 'games', 'play', 'playing', 'played', 'player', 'players',  # Generic game words
+            'feedback', 'comment', 'review', 'opinion'  # Generic feedback words
+        }
+        
+        # Filter out common/generic words and get most frequent meaningful words
+        filtered = {w: c for w, c in word_freq.items() if w not in common_words and len(w) > 3}
         
         if filtered:
+            # Get top 2-3 most frequent specific words
             top_words = sorted(filtered.items(), key=lambda x: x[1], reverse=True)[:2]
-            return ' '.join(w[0].title() for w in top_words)
+            keywords = ' '.join(w[0].title() for w in top_words)
+            
+            # If we got good keywords, return them
+            if len(keywords) > 4:  # At least something meaningful
+                return keywords
         
-        # Ultimate fallback - return generic English name
-        return "Player Feedback"
+        # If still no good keywords, try to extract noun-like words (capitalized or longer words)
+        potential_topics = [w.title() for w in words if len(w) > 4 and w not in common_words]
+        if potential_topics:
+            # Use the first few unique ones
+            unique_topics = []
+            seen = set()
+            for topic in potential_topics:
+                if topic.lower() not in seen and len(unique_topics) < 2:
+                    unique_topics.append(topic)
+                    seen.add(topic.lower())
+            if unique_topics:
+                return ' '.join(unique_topics)
+        
+        # Last resort - return topic ID based name
+        return "Unclassified Topic"
     
     def generate_topic_summary(self, topic_data: Dict, topic_name: str) -> str:
         """

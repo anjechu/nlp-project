@@ -229,8 +229,21 @@ Now provide the two topic names (NO explanations):"""
             # Parse the dual-language response
             lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
             
-            topic_name_native = lines[0].strip('"\'') if len(lines) > 0 else self._extract_keywords(sentences)
-            topic_name_en = lines[1].strip('"\'') if len(lines) > 1 else topic_name_native
+            # Clean up LLM response - remove bullets, numbers, dashes, colons, etc.
+            def clean_topic_name(name: str) -> str:
+                """Remove unwanted prefixes and suffixes from LLM-generated topic names"""
+                if not name:
+                    return name
+                # Remove leading bullets, numbers, dashes, colons, and special characters
+                name = re.sub(r'^[•\-–—\d\.\)]+\s*', '', name)
+                name = re.sub(r'^\d+\.\s*', '', name)  # Remove "1. " style numbering
+                name = re.sub(r'^[:\-–—]\s*', '', name)  # Remove leading colons/dashes
+                name = re.sub(r'\s*[:\-–—]\s*\d+\s*mentions?\s*$', '', name, flags=re.IGNORECASE)  # Remove trailing ": 77 mentions"
+                name = name.strip(r'"\'•\-–—: ')  # Strip quotes and special chars
+                return name.strip()
+            
+            topic_name_native = clean_topic_name(lines[0]) if len(lines) > 0 else self._extract_keywords(sentences)
+            topic_name_en = clean_topic_name(lines[1]) if len(lines) > 1 else topic_name_native
             
             # Fallback if response is too long or invalid
             if len(topic_name_native) > self.MAX_TOPIC_NAME_LENGTH:

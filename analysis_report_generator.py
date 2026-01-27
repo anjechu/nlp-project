@@ -783,9 +783,6 @@ class AnalysisReportGenerator:
         # Cultural Analysis Section
         html += self._generate_cultural_analysis_section(topics, cultural_summary, is_llm_enhanced)
         
-        # Game-Specific Cross-Cultural Comparison Section (NEW)
-        html += self._generate_game_specific_comparison(topics, original_data, is_llm_enhanced)
-        
         # Detailed Topic Analysis Section
         html += self._generate_topics_section(topics, is_llm_enhanced)
         
@@ -971,10 +968,10 @@ class AnalysisReportGenerator:
             
             if culture_name in by_language:
                 sentiment = topic.get('sentiment_label', 'neutral').lower()
-                # Use English name for consistency in executive summary
+                # Use English name for consistency in executive summary and clean it
                 topic_name_en = topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}"))
                 topic_info = {
-                    'name': topic_name_en,
+                    'name': self._clean_topic_name(topic_name_en),
                     'density': topic.get('density', 0),
                     'score': topic.get('sentiment_score', 0),
                     'summary': topic.get('summary', '')
@@ -1264,7 +1261,7 @@ class AnalysisReportGenerator:
                     culture_topics[culture]['negative'] += count
                 
                 culture_topics[culture]['topics'].append({
-                    'name': topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}")),
+                    'name': self._clean_topic_name(topic.get('topic_name_en', topic.get('topic_name', f"Topic {topic.get('topic_id')}"))),
                     'count': count,
                     'sentiment': sentiment
                 })
@@ -1478,8 +1475,8 @@ class AnalysisReportGenerator:
                 for idx, topic in enumerate(sorted_topics, 1):
                     topic_id = topic.get('topic_id', idx)
                     # Use English name as primary, show native name in parentheses if different
-                    topic_name_en = topic.get('topic_name_en', topic.get('topic_name', f'Topic {topic_id}'))
-                    topic_name_native = topic.get('topic_name_native', topic_name_en)
+                    topic_name_en = self._clean_topic_name(topic.get('topic_name_en', topic.get('topic_name', f'Topic {topic_id}')))
+                    topic_name_native = self._clean_topic_name(topic.get('topic_name_native', topic_name_en))
                     
                     # Display format: "English Name (Native Name)" if they differ
                     if topic_name_native != topic_name_en and topic_name_native:
@@ -1590,46 +1587,48 @@ class AnalysisReportGenerator:
                     <li><strong>Cultural Analysis:</strong> Language-based segmentation and comparison</li>
                     <li><strong>LLM Enhancement:</strong> Qwen model for topic naming and insight generation</li>
                 </ul>
-                
-                <h3>Data Statistics</h3>
-                <div class="stats-grid">
-"""
-        
-        total = stats.get('total', 0)
-        valid = stats.get('valid', total)
-        
-        html += f"""
-                    <div class="stat-card">
-                        <span class="value">{total}</span>
-                        <span class="label">Raw Reviews</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="value">{valid}</span>
-                        <span class="label">Processed Reviews</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="value">{(valid/total*100) if total > 0 else 0:.1f}%</span>
-                        <span class="label">Data Quality</span>
-                    </div>
-"""
-        
-        html += """
-                </div>
             </div>
 """
         
         return html
+    
+    def _clean_topic_name(self, name: str) -> str:
+        """
+        Clean topic name by removing unwanted prefixes, suffixes, and special characters.
+        Handles cases like:
+        - "• 光影问题" -> "光影问题"
+        - "1. Weapon Balance Issues" -> "Weapon Balance Issues"
+        - "- テクノロジーの冒険: 34 mentions" -> "テクノロジーの冒険"
+        - "太好玩了啊啊啊啊啊: 77 mentions" -> "太好玩了啊啊啊啊啊"
+        """
+        if not name:
+            return name
+        
+        import re
+        # Remove leading bullets, numbers, dashes, and special characters
+        name = re.sub(r'^[•\-–—\d\.\)]+\s*', '', name)
+        name = re.sub(r'^\d+\.\s*', '', name)  # Remove "1. " style numbering
+        name = re.sub(r'^[:\-–—]\s*', '', name)  # Remove leading colons/dashes
+        # Remove trailing mention counts like ": 77 mentions" or "- 34 mentions"
+        name = re.sub(r'\s*[:\-–—]\s*\d+\s*mentions?\s*$', '', name, flags=re.IGNORECASE)
+        # Remove excessive repeated characters (like "啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊")
+        # Keep at most 3 repeated characters
+        name = re.sub(r'(.)\1{3,}', r'\1\1\1', name)
+        name = name.strip(r'"\'•\-–—: ')  # Strip quotes and special chars
+        return name.strip()
     
     def _get_culture_name(self, lang_code: str) -> str:
         """Convert language code to readable culture name"""
         mapping = {
             'schinese': 'Chinese',
             'tchinese': 'Chinese',
+            'chinese': 'Chinese',  # Handle both with and without 's' prefix
             'japanese': 'Japanese',
             'english': 'English',
-            'korean': 'Korean'
+            'korean': 'Korean',
+            'koreana': 'Korean'
         }
-        return mapping.get(lang_code.lower(), lang_code.capitalize())
+        return mapping.get(lang_code.lower(), 'Unknown')
 
 
 # Standalone test

@@ -991,6 +991,74 @@ class AnalysisReportGenerator:
                     <strong>横向对比 (Horizontal Comparison):</strong> What Chinese, Japanese, and English players like vs. dislike - actionable insights for your game development.
                 </p>
                 
+                <style>
+                    .exec-summary-item {
+                        position: relative;
+                        transition: all 0.3s ease;
+                        cursor: pointer;
+                        overflow: hidden;
+                    }
+                    
+                    .exec-summary-item:hover {
+                        transform: translateY(-4px) scale(1.02);
+                        box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3);
+                        z-index: 10;
+                    }
+                    
+                    .exec-summary-item.positive {
+                        background: rgba(78, 205, 196, 0.1);
+                        border-left: 3px solid #4ecdc4;
+                    }
+                    
+                    .exec-summary-item.positive:hover {
+                        background: rgba(78, 205, 196, 0.2);
+                        border-left-color: #2fb8ad;
+                    }
+                    
+                    .exec-summary-item.negative {
+                        background: rgba(231, 76, 60, 0.1);
+                        border-left: 3px solid #e74c3c;
+                    }
+                    
+                    .exec-summary-item.negative:hover {
+                        background: rgba(231, 76, 60, 0.2);
+                        border-left-color: #c0392b;
+                    }
+                    
+                    .summary-text-short {
+                        display: block;
+                    }
+                    
+                    .summary-text-full {
+                        display: none;
+                        margin-top: 8px;
+                        padding: 10px;
+                        background: rgba(0, 0, 0, 0.3);
+                        border-radius: 4px;
+                        border: 1px solid rgba(108, 92, 231, 0.3);
+                    }
+                    
+                    .exec-summary-item:hover .summary-text-short {
+                        display: none;
+                    }
+                    
+                    .exec-summary-item:hover .summary-text-full {
+                        display: block;
+                        animation: fadeIn 0.3s ease;
+                    }
+                    
+                    @keyframes fadeIn {
+                        from {
+                            opacity: 0;
+                            transform: translateY(-10px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0);
+                        }
+                    }
+                </style>
+                
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; margin-top: 30px;">
 """
         
@@ -1012,16 +1080,26 @@ class AnalysisReportGenerator:
             
             if positive:
                 for item in positive:
+                    # Prepare summaries
+                    has_long_summary = item['summary'] and is_llm and len(item['summary']) > 100
+                    summary_short = item['summary'][:100] + '...' if has_long_summary else (item['summary'] if item['summary'] and is_llm else '')
+                    full_summary = item['summary'] if item['summary'] and is_llm else ''
+                    
                     html += f"""
-                            <div style="background: rgba(78, 205, 196, 0.1); padding: 10px; margin: 8px 0; border-left: 3px solid #4ecdc4; border-radius: 4px;">
+                            <div class="exec-summary-item positive" style="padding: 10px; margin: 8px 0; border-radius: 4px;">
                                 <div style="font-weight: bold; color: #4ecdc4;">• {item['name']}</div>
                                 <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
 """
-                    if item['summary'] and is_llm:
-                        summary_short = item['summary'][:100] + '...' if len(item['summary']) > 100 else item['summary']
-                        full_summary = item['summary'].replace('"', '&quot;').replace("'", '&#39;')
+                    if summary_short:
                         html += f"""
-                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic; cursor: help;" title="{full_summary}">{summary_short}</div>
+                                <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+"""
+                    if has_long_summary:
+                        html += f"""
+                                <div class="summary-text-full" style="font-size: 0.85em; color: #e0e0e0; font-style: italic;">
+                                    <strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>
+                                    {full_summary}
+                                </div>
 """
                     html += """
                             </div>
@@ -1040,16 +1118,26 @@ class AnalysisReportGenerator:
             
             if negative:
                 for item in negative:
+                    # Prepare summaries
+                    has_long_summary = item['summary'] and is_llm and len(item['summary']) > 100
+                    summary_short = item['summary'][:100] + '...' if has_long_summary else (item['summary'] if item['summary'] and is_llm else '')
+                    full_summary = item['summary'] if item['summary'] and is_llm else ''
+                    
                     html += f"""
-                            <div style="background: rgba(231, 76, 60, 0.1); padding: 10px; margin: 8px 0; border-left: 3px solid #e74c3c; border-radius: 4px;">
+                            <div class="exec-summary-item negative" style="padding: 10px; margin: 8px 0; border-radius: 4px;">
                                 <div style="font-weight: bold; color: #e74c3c;">• {item['name']}</div>
                                 <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
 """
-                    if item['summary'] and is_llm:
-                        summary_short = item['summary'][:100] + '...' if len(item['summary']) > 100 else item['summary']
-                        full_summary = item['summary'].replace('"', '&quot;').replace("'", '&#39;')
+                    if summary_short:
                         html += f"""
-                                <div style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic; cursor: help;" title="{full_summary}">{summary_short}</div>
+                                <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+"""
+                    if has_long_summary:
+                        html += f"""
+                                <div class="summary-text-full" style="font-size: 0.85em; color: #e0e0e0; font-style: italic;">
+                                    <strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>
+                                    {full_summary}
+                                </div>
 """
                     html += """
                             </div>

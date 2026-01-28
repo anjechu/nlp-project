@@ -844,14 +844,19 @@ Summary:"""
         all_stats['games_processed'] = list(all_stats['games_processed'])
         all_stats['languages_processed'] = list(all_stats['languages_processed'])
         
+        # Generate chart data from aggregated topics
+        charts_data = self._generate_chart_data(all_topics)
+        
         print(f"📊 REDUCE COMPLETE:")
         print(f"   • Total valuable topics: {len(all_topics)}")
         print(f"   • Games: {', '.join(all_stats['games_processed'])}")
         print(f"   • Languages: {', '.join(all_stats['languages_processed'])}")
+        print(f"   • Charts data generated: {list(charts_data.keys())}")
         
         return {
             'topics': all_topics,
             'statistics': all_stats,
+            'charts': charts_data,  # Add charts field for chart generation
             'llm_enhanced': True,
             'map_reduce_processed': True,
             'total_valuable_topics': len(all_topics)

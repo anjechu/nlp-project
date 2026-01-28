@@ -1,0 +1,64 @@
+{
+    "statistics": {
+        "total_reviews": 13877,
+        "valid_sentences": 3411,
+        "clustered": 527,
+        "coverage": "15.45%"
+    },
+    "topics": [
+        {
+            "topic_id": 2,
+            "density": 443,
+            "sentiment_score": 0.0,
+            "sentiment_label": "neutral",
+            "representative_sentences": [
+                "豪玩 豪玩",
+                "好玩goodgame",
+                "好玩嘿嘿嘿嘿"
+            ],
+            "sample_texts": [
+                "我是你们的铁哥们斯坦",
+                "游戏代入感很强，支线剧情也很有意思，非常值得一玩",
+                "好 超级好 无敌好",
+                "啊啊啊啊啊啊气死我了，但是还是很好玩",
+                "爽爆了"
+            ]
+        },
+        {
+            "topic_id": 0,
+            "density": 57,
+            "sentiment_score": 0.0,
+            "sentiment_label": "neutral",
+            "representative_sentences": [
+                "干杯，敬夜之城",
+                "去做夜之城活着的传奇吧",
+                "一起成为夜之城的传奇吧"
+            ],
+            "sample_texts": [
+                "以上是自己的一点点感想，祝各位v震天在夜之城玩的愉快",
+                "早上好，夜之城",
+                "如今，我也要面对比夜之城更大的夜之城，希望你我都能在自己的夜之城里成为自己的传奇",
+                "牛逼啊，夜之城",
+                "晚安，瓦莱莉，今天是个好日子"
+            ]
+        },
+        {
+            "topic_id": 1,
+            "density": 27,
+            "sentiment_score": 0.0,
+            "sentiment_label": "neutral",
+            "representative_sentences": [
+                "1231321",
+                "21312312",
+                "111111111111111"
+            ],
+            "sample_texts": [
+                "在2077年，",
+                "id=3642113523",
+                "id=3644129955",
+                "71dlc",
+                "已经开始期待2077年了"
+            ]
+        }
+    ]
+}

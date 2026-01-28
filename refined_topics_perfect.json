@@ -1,0 +1,212 @@
+[
+    {
+        "topic_id": 4,
+        "density": 179,
+        "sentiment_score": 0.2106,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 179
+        },
+        "representative_sentences": [
+            "来夜之城当来生的传奇吧",
+            "那就敬夜之城",
+            "成为夜之城的传奇吧"
+        ],
+        "sample_texts": [
+            "敬JACKIE WELLES，夜之城真正的大人物",
+            "早安，夜之城",
+            "在夜之城人们都说没有活着的传奇，但是v做到了",
+            "再见夜之城",
+            "而踏入夜之城的你，也将会成为那唯一的活传奇"
+        ]
+    },
+    {
+        "topic_id": 8,
+        "density": 101,
+        "sentiment_score": 0.5416,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 101
+        },
+        "representative_sentences": [
+            "好玩，真好玩",
+            "好玩的，顶好玩",
+            "挺好玩的挺好玩的哦"
+        ],
+        "sample_texts": [
+            "这是真的好玩喵～",
+            "好玩，太好玩了",
+            "好玩的，顶好玩",
+            "好玩，爱玩",
+            "但是好玩还是好玩🥰"
+        ]
+    },
+    {
+        "topic_id": 6,
+        "density": 27,
+        "sentiment_score": 0.753,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 27
+        },
+        "representative_sentences": [
+            "很好玩的一个游戏，很棒",
+            "好玩，游戏特别棒",
+            "非常棒的游戏"
+        ],
+        "sample_texts": [
+            "非常好玩的游戏",
+            "很好的游戏",
+            "游戏是不错",
+            "佳作好游戏",
+            "确实是好玩的游戏"
+        ]
+    },
+    {
+        "topic_id": 7,
+        "density": 23,
+        "sentiment_score": 0.0704,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 23
+        },
+        "representative_sentences": [
+            "无名小卒or名扬天下",
+            "🍦🍦🍦🧡真的🧡🍦🍦🍦",
+            "想玩往日之影˃ʍ˂"
+        ],
+        "sample_texts": [
+            "（一直等待的华子🧐）",
+            "by the way 亚当重锤，给我死",
+            "呜呜大卫😭😭😭",
+            "★★★★(注",
+            "(以下内容无剧透)"
+        ]
+    },
+    {
+        "topic_id": 0,
+        "density": 15,
+        "sentiment_score": -0.1768,
+        "sentiment_label": "Negative",
+        "cultural_distribution": {
+            "schinese": 15
+        },
+        "representative_sentences": [
+            "手动驾驶手感稀烂",
+            "好玩，但是开车手感真是烂",
+            "开车手感巨差，车很飘"
+        ],
+        "sample_texts": [
+            "这赛车任务是傻叉吧，怎么会有这么难开的车",
+            "开车手感巨差，车很飘",
+            "手动驾驶手感稀烂",
+            "驾驶手感一坨",
+            "好丸，但是车的驾驶手感纯一坨，车轮子跟抹了油一样"
+        ]
+    },
+    {
+        "topic_id": 5,
+        "density": 15,
+        "sentiment_score": 0.2354,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 15
+        },
+        "representative_sentences": [
+            "加了dlc的神中神",
+            "神（凑个字数）",
+            "代入感的神"
+        ],
+        "sample_texts": [
+            "本体还可以，加上dlc神中神",
+            "多的不说，神中神",
+            "神作，无需多言",
+            "真的是神作",
+            "加了dlc的神中神"
+        ]
+    },
+    {
+        "topic_id": 1,
+        "density": 10,
+        "sentiment_score": 0.2281,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 10
+        },
+        "representative_sentences": [
+            "永远不要放弃战斗啊，V",
+            "永远不要放弃战斗，V",
+            "永远都不要放弃战斗，V"
+        ],
+        "sample_texts": [
+            "“再见了，V，永远不要放弃战斗",
+            "“V，永远不要放弃斗争",
+            "那么故事就到此结束吧，ヾ(￣▽￣)Bye~Bye~赛博朋克",
+            "永远不要放弃战斗，V",
+            "永远不要放弃战斗啊，V"
+        ]
+    },
+    {
+        "topic_id": 2,
+        "density": 10,
+        "sentiment_score": -0.6224,
+        "sentiment_label": "Negative",
+        "cultural_distribution": {
+            "schinese": 10
+        },
+        "representative_sentences": [
+            "杰克死的也太突然了，哎",
+            "最棒最强的就是剧情了 印象最深的是杰克吧 尽管杰克在的时间很短 但是认真玩了游戏的人应该都会对杰克的离开感到很难过😔",
+            "玩到现在好玩，可惜杰克去世了"
+        ],
+        "sample_texts": [
+            "很多人说JACKIE盒饭领的太早，以至于对这个角色没有那么多的感情，但依我看来，只要是认认真真去看剧情，做支线的都会对V在夜之城遇到的第一个好兄弟的过早退场而感到惋惜，杰克的角色价值不体现在退场前，而是体现在退场后",
+            "不足的地方就是杰克死了",
+            "还是好可惜失去了杰克这个好朋友",
+            "挺不错的游戏但是由于是半成品开局杰克的剧情太少了杰克死的有点突然",
+            "新人感觉非常好，但是剧情很刀人，特别是杰克死了"
+        ]
+    },
+    {
+        "topic_id": 3,
+        "density": 10,
+        "sentiment_score": -0.464,
+        "sentiment_label": "Negative",
+        "cultural_distribution": {
+            "schinese": 10
+        },
+        "representative_sentences": [
+            "剧情有点太短了",
+            "意犹未尽啊，主线剧情太短了，有点蛇尾",
+            "最后还想说一句，主线剧情太短了"
+        ],
+        "sample_texts": [
+            "主线剧情居然非常短，全靠支线支撑，只能说一般吧",
+            "最后还想说一句，主线剧情太短了",
+            "剧情很不错，但是主线剧情有点短",
+            "剧情挺不错就是有点短",
+            "还行吧就是主线有点短"
+        ]
+    },
+    {
+        "topic_id": 9,
+        "density": 10,
+        "sentiment_score": 0.5711,
+        "sentiment_label": "Positive",
+        "cultural_distribution": {
+            "schinese": 10
+        },
+        "representative_sentences": [
+            "不错不错的，okok",
+            "好，就是这么好（）",
+            "不错，不错"
+        ],
+        "sample_texts": [
+            "好，就是这么好（）",
+            "good很好很不错",
+            "不错，不错",
+            "挺好的，有那味儿了",
+            "很不错的嘻嘻嘻"
+        ]
+    }
+]

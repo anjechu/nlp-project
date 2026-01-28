@@ -985,7 +985,7 @@ class AnalysisReportGenerator:
                 }
                 by_language[culture_name][sentiment].append(topic_info)
         
-        html = """
+        html_content = """
             <div class="section" style="background: linear-gradient(135deg, rgba(108, 92, 231, 0.1) 0%, rgba(74, 105, 189, 0.1) 100%); border: 2px solid #6c5ce7;">
                 <h2>🎮 Executive Summary for Game Developers</h2>
                 <p style="margin-bottom: 20px; color: #d0d0d0; font-size: 1.1em;">
@@ -1070,7 +1070,7 @@ class AnalysisReportGenerator:
             # Language flag emoji
             flag = {'Chinese': '🇨🇳', 'Japanese': '🇯🇵', 'English': '🇬🇧'}[language]
             
-            html += f"""
+            html_content += f"""
                     <div style="background: #0f1419; padding: 25px; border-radius: 8px; border: 1px solid #2d2d44;">
                         <h3 style="color: #6c5ce7; margin-bottom: 20px;">{flag} {language} Players</h3>
                         
@@ -1090,31 +1090,31 @@ class AnalysisReportGenerator:
                     summary_short_escaped = html.escape(summary_short) if summary_short else ''
                     full_summary_escaped = html.escape(full_summary) if full_summary else ''
                     
-                    html += f"""
+                    html_content += f"""
                             <div class="exec-summary-item positive" style="padding: 10px; margin: 8px 0; border-radius: 4px;">
                                 <div style="font-weight: bold; color: #4ecdc4;">• {name_escaped}</div>
                                 <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
 """
                     if summary_short:
-                        html += f"""
+                        html_content += f"""
                                 <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short_escaped}</div>
 """
                     if has_long_summary:
-                        html += f"""
+                        html_content += f"""
                                 <div class="summary-text-full" style="font-size: 0.85em; color: #e0e0e0; font-style: italic;">
                                     <strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>
                                     {full_summary_escaped}
                                 </div>
 """
-                    html += """
+                    html_content += """
                             </div>
 """
             else:
-                html += """
+                html_content += """
                             <div style="color: #808080; font-style: italic; padding: 10px;">No significant positive topics found</div>
 """
             
-            html += """
+            html_content += """
                         </div>
                         
                         <div>
@@ -1133,36 +1133,36 @@ class AnalysisReportGenerator:
                     summary_short_escaped = html.escape(summary_short) if summary_short else ''
                     full_summary_escaped = html.escape(full_summary) if full_summary else ''
                     
-                    html += f"""
+                    html_content += f"""
                             <div class="exec-summary-item negative" style="padding: 10px; margin: 8px 0; border-radius: 4px;">
                                 <div style="font-weight: bold; color: #e74c3c;">• {name_escaped}</div>
                                 <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
 """
                     if summary_short:
-                        html += f"""
+                        html_content += f"""
                                 <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short_escaped}</div>
 """
                     if has_long_summary:
-                        html += f"""
+                        html_content += f"""
                                 <div class="summary-text-full" style="font-size: 0.85em; color: #e0e0e0; font-style: italic;">
                                     <strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>
                                     {full_summary_escaped}
                                 </div>
 """
-                    html += """
+                    html_content += """
                             </div>
 """
             else:
-                html += """
+                html_content += """
                             <div style="color: #808080; font-style: italic; padding: 10px;">No significant negative topics found</div>
 """
             
-            html += """
+            html_content += """
                         </div>
                     </div>
 """
         
-        html += """
+        html_content += """
                 </div>
                 
                 <div style="background: rgba(108, 92, 231, 0.15); padding: 20px; border-radius: 8px; margin-top: 30px; border-left: 4px solid #6c5ce7;">
@@ -1177,7 +1177,7 @@ class AnalysisReportGenerator:
             </div>
 """
         
-        return html
+        return html_content
     
     def _generate_game_specific_comparison(self, topics: List[Dict], original_data: Dict, is_llm: bool) -> str:
         """

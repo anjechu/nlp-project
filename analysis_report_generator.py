@@ -5,6 +5,7 @@ Creates professional, comprehensive analysis reports with integrated charts and 
 
 import json
 import os
+import html
 from datetime import datetime
 from typing import Dict, List, Optional
 import base64
@@ -996,7 +997,6 @@ class AnalysisReportGenerator:
                         position: relative;
                         transition: all 0.3s ease;
                         cursor: pointer;
-                        overflow: hidden;
                     }
                     
                     .exec-summary-item:hover {
@@ -1085,20 +1085,25 @@ class AnalysisReportGenerator:
                     summary_short = item['summary'][:100] + '...' if has_long_summary else (item['summary'] if item['summary'] and is_llm else '')
                     full_summary = item['summary'] if item['summary'] and is_llm else ''
                     
+                    # HTML escape to prevent XSS
+                    name_escaped = html.escape(item['name'])
+                    summary_short_escaped = html.escape(summary_short) if summary_short else ''
+                    full_summary_escaped = html.escape(full_summary) if full_summary else ''
+                    
                     html += f"""
                             <div class="exec-summary-item positive" style="padding: 10px; margin: 8px 0; border-radius: 4px;">
-                                <div style="font-weight: bold; color: #4ecdc4;">• {item['name']}</div>
+                                <div style="font-weight: bold; color: #4ecdc4;">• {name_escaped}</div>
                                 <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
 """
                     if summary_short:
                         html += f"""
-                                <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+                                <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short_escaped}</div>
 """
                     if has_long_summary:
                         html += f"""
                                 <div class="summary-text-full" style="font-size: 0.85em; color: #e0e0e0; font-style: italic;">
                                     <strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>
-                                    {full_summary}
+                                    {full_summary_escaped}
                                 </div>
 """
                     html += """
@@ -1123,20 +1128,25 @@ class AnalysisReportGenerator:
                     summary_short = item['summary'][:100] + '...' if has_long_summary else (item['summary'] if item['summary'] and is_llm else '')
                     full_summary = item['summary'] if item['summary'] and is_llm else ''
                     
+                    # HTML escape to prevent XSS
+                    name_escaped = html.escape(item['name'])
+                    summary_short_escaped = html.escape(summary_short) if summary_short else ''
+                    full_summary_escaped = html.escape(full_summary) if full_summary else ''
+                    
                     html += f"""
                             <div class="exec-summary-item negative" style="padding: 10px; margin: 8px 0; border-radius: 4px;">
-                                <div style="font-weight: bold; color: #e74c3c;">• {item['name']}</div>
+                                <div style="font-weight: bold; color: #e74c3c;">• {name_escaped}</div>
                                 <div style="font-size: 0.9em; color: #b0b0b0; margin-top: 4px;">👥 {item['density']} players | Score: {item['score']:+.2f}</div>
 """
                     if summary_short:
                         html += f"""
-                                <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short}</div>
+                                <div class="summary-text-short" style="font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic;">{summary_short_escaped}</div>
 """
                     if has_long_summary:
                         html += f"""
                                 <div class="summary-text-full" style="font-size: 0.85em; color: #e0e0e0; font-style: italic;">
                                     <strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>
-                                    {full_summary}
+                                    {full_summary_escaped}
                                 </div>
 """
                     html += """

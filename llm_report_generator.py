@@ -625,10 +625,10 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10")
     
     def _generate_cultural_summary(self, topics: List[Dict]) -> str:
         """
-        Generate an overall cross-cultural summary across ALL valuable topics
+        Generate a comprehensive cross-cultural analysis across ALL valuable topics
         
-        Important: This receives ALL LLM-filtered valuable topics and uses them all
-        to generate the summary, not just a subset.
+        Important: This receives ALL LLM-filtered valuable topics and generates
+        an in-depth, insightful analysis of cultural preference differences.
         """
         if not self.llm_available:
             return "Cross-cultural analysis requires LLM support."
@@ -645,53 +645,73 @@ List ONLY the numbers of VALUABLE topics (comma-separated, e.g., "1,3,5,7,8,10")
             cultural_summary = {self.LANG_MAP.get(lang, lang.capitalize()): count 
                               for lang, count in all_cultures.items()}
             
-            # Categorize ALL topics by sentiment for comprehensive analysis
-            sorted_topics = sorted(topics, key=lambda x: x.get('sentiment_score', 0), reverse=True)
-            positive_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) > 0]
-            negative_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) < 0]
-            neutral_topics = [t for t in sorted_topics if t.get('sentiment_score', 0) == 0]
+            # Organize topics by culture and sentiment for deep analysis
+            culture_topics = {culture: {'positive': [], 'negative': [], 'neutral': []} 
+                            for culture in cultural_summary.keys()}
             
-            # Handle large datasets: limit prompt size to prevent token overflow
-            # If too many topics, show top/bottom topics with count summary
-            max_topics_per_category = 15
+            for topic in topics:
+                topic_dist = topic.get('cultural_distribution', {})
+                if not topic_dist:
+                    continue
+                
+                # Find primary culture for this topic
+                primary_lang = max(topic_dist.items(), key=lambda x: x[1])[0] if topic_dist else None
+                if primary_lang:
+                    primary_culture = self.LANG_MAP.get(primary_lang, primary_lang.capitalize())
+                    if primary_culture in culture_topics:
+                        sentiment = topic.get('sentiment_label', 'neutral').lower()
+                        culture_topics[primary_culture][sentiment].append({
+                            'name': topic.get('topic_name', 'Topic'),
+                            'density': topic.get('density', 0),
+                            'score': topic.get('sentiment_score', 0)
+                        })
             
-            def format_topic_list(topic_list, max_count):
-                """Format topic list with truncation if needed"""
-                if len(topic_list) <= max_count:
-                    return chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" 
-                                        for t in topic_list])
-                else:
-                    shown = topic_list[:max_count]
-                    remaining = len(topic_list) - max_count
-                    result = chr(10).join([f"  • {t.get('topic_name', 'Topic')} ({t.get('density', 0)} players)" 
-                                          for t in shown])
-                    result += f"\n  • ... and {remaining} more topics"
-                    return result
+            # Sort topics by density within each category
+            for culture in culture_topics:
+                for sentiment in ['positive', 'negative', 'neutral']:
+                    culture_topics[culture][sentiment].sort(key=lambda x: x['density'], reverse=True)
             
-            prompt = f"""Provide a cross-cultural analysis summary for this game feedback.
-
-Player Distribution:
-{chr(10).join(f'- {culture}: {count} players' for culture, count in cultural_summary.items())}
-
-Total {len(topics)} Valuable Topics Analyzed:
-
-Positive Topics ({len(positive_topics)}):
-{format_topic_list(positive_topics, max_topics_per_category)}
-
-Negative Topics ({len(negative_topics)}):
-{format_topic_list(negative_topics, max_topics_per_category)}
-
-Neutral Topics ({len(neutral_topics)}):
-{format_topic_list(neutral_topics, max_topics_per_category)}
-
-Provide a comprehensive 3-4 sentence summary considering all {len(topics)} topics, highlighting:
-1. Key differences in preferences between Chinese, Japanese, and English-speaking players
-2. Common themes across all cultures
-3. Notable cultural insights for developers
-
-Summary:"""
+            # Format detailed topic breakdowns for each culture
+            max_topics_per_sentiment = 8  # Show top 8 per sentiment category
             
-            response = self._query_llm(prompt, max_tokens=300)
+            def format_culture_breakdown(culture_name):
+                """Format comprehensive topic list for a culture"""
+                culture_data = culture_topics[culture_name]
+                sections = []
+                
+                for sentiment_type, sentiment_label in [('positive', 'LIKE'), ('negative', 'DISLIKE'), ('neutral', 'NEUTRAL')]:
+                    topics_list = culture_data[sentiment_type][:max_topics_per_sentiment]
+                    if topics_list:
+                        topic_strs = [f"{t['name']} ({t['density']} mentions)" for t in topics_list]
+                        sections.append(f"  {sentiment_label}: {', '.join(topic_strs[:5])}" + 
+                                      (f" and {len(topics_list)-5} more" if len(topics_list) > 5 else ""))
+                
+                return chr(10).join(sections) if sections else "  No significant topics"
+            
+            # Build comprehensive prompt for deep cultural analysis
+            culture_breakdowns = []
+            for culture in sorted(cultural_summary.keys()):
+                breakdown = f"{culture} Players ({cultural_summary[culture]} total):\n{format_culture_breakdown(culture)}"
+                culture_breakdowns.append(breakdown)
+            
+            prompt = f"""Based on analysis of {len(topics)} valuable player feedback topics across different cultures, provide a COMPREHENSIVE, INSIGHTFUL paragraph (6-8 sentences minimum) analyzing crucial cultural preference differences.
+
+Player Distribution & Topic Preferences:
+{chr(10).join(culture_breakdowns)}
+
+Your analysis MUST:
+1. Identify 3-4 SPECIFIC examples of divergent preferences between cultures (e.g., Chinese players prioritize X while Japanese players prefer Y)
+2. Explain WHY these differences exist based on cultural gaming values and expectations
+3. Highlight any surprising or counterintuitive findings
+4. Provide ACTIONABLE insights for developers on how to address each culture's priorities
+5. Discuss which features are universally valued vs. culturally specific
+6. Mention potential localization strategies that could improve satisfaction for each market
+
+Write a detailed, analytical paragraph that developers can use to make crucial decisions. Be specific, cite topics by name, and provide genuine cultural insights beyond surface observations.
+
+Comprehensive Cultural Analysis:"""
+            
+            response = self._query_llm(prompt, max_tokens=500)
             return response.strip()
             
         except Exception as e:
@@ -703,26 +723,25 @@ Summary:"""
         Generate data for charts and visualizations
         
         Important: This receives ONLY the LLM-filtered valuable topics.
-        We show ALL of them without further limiting.
         Uses English names for consistency across all charts.
         """
         
-        # Sentiment distribution
+        # Sentiment distribution (uses all topics)
         sentiment_counts = {'positive': 0, 'neutral': 0, 'negative': 0}
         for topic in topics:
             label = topic.get('sentiment_label', 'neutral').lower()
             sentiment_counts[label] = sentiment_counts.get(label, 0) + topic.get('density', 0)
         
-        # Topic density chart (ALL valuable topics, not limited)
-        # LLM has already filtered to keep only valuable topics, so show all of them
+        # Topic density chart - limit to top 15 for readability
         # Use English names for consistency
         sorted_topics = sorted(topics, key=lambda x: x.get('density', 0), reverse=True)
+        top_15_topics = sorted_topics[:15]  # Show only top 15 topics
         density_chart = {
-            'labels': [t.get('topic_name', f"Topic {t['topic_id']}") for t in sorted_topics],
-            'values': [t.get('density', 0) for t in sorted_topics]
+            'labels': [t.get('topic_name', f"Topic {t['topic_id']}") for t in top_15_topics],
+            'values': [t.get('density', 0) for t in top_15_topics]
         }
         
-        # Sentiment score distribution
+        # Sentiment score distribution (uses all topics for statistical accuracy)
         sentiment_scores = [t.get('sentiment_score', 0) for t in topics]
         
         return {

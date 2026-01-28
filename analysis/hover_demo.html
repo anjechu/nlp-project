@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Hover Demo</title>
+<style>
+body { font-family: sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+.exec-summary-item { position: relative; transition: all 0.3s ease; cursor: pointer; padding: 10px; margin: 8px 0; border-radius: 4px; }
+.exec-summary-item:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3); z-index: 10; }
+.exec-summary-item.positive { background: rgba(78, 205, 196, 0.1); border-left: 3px solid #4ecdc4; }
+.exec-summary-item.positive:hover { background: rgba(78, 205, 196, 0.2); }
+.summary-text-short { display: block; font-size: 0.85em; color: #d0d0d0; margin-top: 6px; font-style: italic; }
+.summary-text-full { display: none; margin-top: 8px; padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; }
+.exec-summary-item:hover .summary-text-short { display: none; }
+.exec-summary-item:hover .summary-text-full { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<h1>Executive Summary Hover Effect Demo</h1>
+<p>Hover over the items below to see the effect!</p>
+<div class="exec-summary-item positive">
+<div style="font-weight: bold; color: #4ecdc4;">• Night City Experience</div>
+<div style="font-size: 0.9em; color: #b0b0b0;">👥 177 players | Score: +0.21</div>
+<div class="summary-text-short">Players are deeply impressed by the immersive night city environment...</div>
+<div class="summary-text-full"><strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>Players are deeply impressed by the immersive night city environment and the legendary status they can achieve. The game creates a compelling narrative where players can become the living legend that Night City has never seen before.</div>
+</div>
+<div class="exec-summary-item positive">
+<div style="font-weight: bold; color: #4ecdc4;">• Gameplay Fun Factor</div>
+<div style="font-size: 0.9em; color: #b0b0b0;">👥 109 players | Score: +0.51</div>
+<div class="summary-text-short">The gameplay mechanics are highly engaging and provide excellent fun...</div>
+<div class="summary-text-full"><strong style="color: #6c5ce7;">💡 Full Insight:</strong><br/>The gameplay mechanics are highly engaging and provide an excellent fun factor. Players consistently report high enjoyment levels, with many describing the experience as genuinely entertaining and worth their time investment.</div>
+</div>
+</body>
+</html>

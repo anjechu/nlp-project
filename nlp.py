@@ -78,16 +78,26 @@ class DataCleaner:
     @classmethod
     def load_external_config(cls, filepath="stopWord.txt"):
         cls.STOP_PHRASES = set()
-        if os.path.exists(filepath):
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        word = line.strip().lower()
-                        if word and not word.startswith("#"):
-                            cls.STOP_PHRASES.add(word)
-                log_print(f"📖 已加载外部过滤词库: {len(cls.STOP_PHRASES)} 条")
-            except Exception as e:
-                log_print(f"❌ 读取 {filepath} 出错: {e}")
+        # Try multiple possible file names
+        possible_files = [filepath, "stopWord.txt.txt", "stopWord.txt", "stopwords.txt"]
+        
+        for possible_file in possible_files:
+            if os.path.exists(possible_file):
+                try:
+                    with open(possible_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            # Remove numbering like "1. ", "2. " etc
+                            line = re.sub(r'^\d+\.\s*', '', line)
+                            word = line.strip().lower()
+                            if word and not word.startswith("#"):
+                                cls.STOP_PHRASES.add(word)
+                    log_print(f"📖 已加载外部过滤词库: {len(cls.STOP_PHRASES)} 条 (from {possible_file})")
+                    cls.CONFIG_LOADED = True
+                    return
+                except Exception as e:
+                    log_print(f"❌ 读取 {possible_file} 出错: {e}")
+        
+        log_print(f"⚠️ 未找到停用词文件，使用内置列表")
         cls.CONFIG_LOADED = True
 
     @staticmethod

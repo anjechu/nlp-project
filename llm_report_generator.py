@@ -10,6 +10,14 @@ from typing import Dict, List, Optional
 from collections import Counter
 import numpy as np
 
+# Import stopwords from nlp module
+try:
+    from nlp import DataCleaner
+    STOPWORDS_AVAILABLE = True
+except ImportError:
+    STOPWORDS_AVAILABLE = False
+    print("⚠️ Warning: Could not import DataCleaner for stopwords")
+
 class LLMReportGenerator:
     """Generates enhanced reports using local LLM (Qwen) for topic naming and cross-cultural insights"""
     
@@ -162,7 +170,16 @@ class LLMReportGenerator:
             sample_texts = topic_data.get('sample_texts', [])[:5]
             sentiment = topic_data.get('sentiment_label', 'neutral')
             
-            # 1. 构造 Prompt（保持你原有的高质量 Prompt）
+            # Get stopword examples for prompt
+            stopword_examples = ""
+            if STOPWORDS_AVAILABLE and DataCleaner.STOP_PHRASES:
+                # Get a few English stopword examples
+                english_stops = [w for w in list(DataCleaner.STOP_PHRASES)[:20] 
+                               if all(ord(c) < 128 for c in w)][:10]
+                if english_stops:
+                    stopword_examples = f"\n- AVOID generic words like: {', '.join(english_stops[:5])}"
+            
+            # 1. 构造 Prompt（保持你原有的高质量 Prompt + 添加停用词指示）
             prompt = f"""Analyze these player feedback samples and provide a SPECIFIC English topic name.
 
 Game: {game_name if game_name else 'Unknown Game'}
@@ -180,7 +197,7 @@ IMPORTANT:
 - ONLY GIVE ME THE TOPIC NAME, no need for any other text, including how you generated it.
 - NO Chinese, NO Japanese, NO Korean - Use English only!
 - Be SPECIFIC to the feedback content - NOT generic!
-- FORBIDDEN generic names: "Player Feedback", "Game Feedback", "User Feedback", "General Feedback"
+- FORBIDDEN generic names: "Player Feedback", "Game Feedback", "User Feedback", "General Feedback"{stopword_examples}
 
 English topic name:"""
 
@@ -242,72 +259,76 @@ English topic name:"""
     
     def _extract_keywords(self, sentences: List[str], topic_id: str = None) -> str:
         """
-        Fallback method to extract English keywords if LLM fails.
-        Only uses Latin characters to ensure English output.
-        Tries to extract meaningful, specific keywords from the content.
+        Fallback method to extract keywords if LLM fails.
+        Uses loaded stopwords from DataCleaner to filter out common words.
         
         Args:
             sentences: List of sentences to extract keywords from
             topic_id: Optional topic ID to use as final fallback
         """
-        # Simple keyword extraction based on frequency
+        # Get stopwords from DataCleaner if available
+        if STOPWORDS_AVAILABLE and DataCleaner.STOP_PHRASES:
+            # Use loaded stopwords from stopWord.txt.txt
+            stopwords = DataCleaner.STOP_PHRASES
+            print(f"🔍 Using {len(stopwords)} stopwords from external file for keyword extraction")
+        else:
+            # Fallback to hardcoded common words
+            stopwords = {
+                'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for', 'and', 'but', 
+                'with', 'this', 'that', 'from', 'has', 'have', 'had', 'will', 'would', 'could', 'should',
+                'can', 'may', 'might', 'must', 'its', 'it', 'be', 'been', 'being', 'not', 'no', 'yes',
+                'so', 'as', 'at', 'by', 'on', 'or', 'if', 'than', 'then', 'when', 'where', 'why', 'how',
+                'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
+                'very', 'really', 'just', 'also', 'too', 'only', 'even', 'much', 'many', 'well',
+                'get', 'got', 'make', 'made', 'like', 'good', 'bad', 'better', 'best', 'worst',
+                'game', 'games', 'playing', 'played',
+                'feedback', 'comment', 'review', 'opinion'
+            }
+            print(f"⚠️ Using fallback stopwords ({len(stopwords)} words)")
+        
+        # Extract words from sentences
         words = []
-        for s in sentences[:5]:  # Look at more sentences for better keywords
-            # Split and filter to only include words with Latin characters
+        for s in sentences[:5]:
             for word in s.split():
-                # Only keep words that are mostly Latin characters (English)
-                latin_chars = sum(1 for c in word if ord(c) < 128)
-                if latin_chars > len(word) * 0.7 and len(word) > 2:  # 70% Latin chars and length > 2
-                    # Clean punctuation
-                    word_clean = word.strip('.,!?;:()[]{}"\'-').lower()
-                    if len(word_clean) > 2:
-                        words.append(word_clean)
+                # Clean punctuation
+                word_clean = word.strip('.,!?;:()[]{}"\'-').lower()
+                if len(word_clean) > 2:
+                    words.append(word_clean)
         
-        # Filter common words and take most frequent
+        # Count word frequencies
         word_freq = Counter(words)
-        # Expanded list of common/generic words to filter out
-        common_words = {
-            'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'for', 'and', 'but', 
-            'with', 'this', 'that', 'from', 'has', 'have', 'had', 'will', 'would', 'could', 'should',
-            'can', 'may', 'might', 'must', 'its', 'it', 'be', 'been', 'being', 'not', 'no', 'yes',
-            'so', 'as', 'at', 'by', 'on', 'or', 'if', 'than', 'then', 'when', 'where', 'why', 'how',
-            'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
-            'very', 'really', 'just', 'also', 'too', 'only', 'even', 'much', 'many', 'well',
-            'get', 'got', 'make', 'made', 'like', 'good', 'bad', 'better', 'best', 'worst',
-            'game', 'games', 'playing', 'played',  # Keep "play" and "player" if they combine with others
-            'feedback', 'comment', 'review', 'opinion'  # Generic feedback words
-        }
         
-        # First pass: Try to get specific words (length > 3)
-        filtered = {w: c for w, c in word_freq.items() if w not in common_words and len(w) > 3}
+        # Filter out stopwords and get most frequent meaningful words
+        filtered = {w: c for w, c in word_freq.items() 
+                   if w not in stopwords and len(w) > 3}
         
         if filtered:
             # Get top 2 most frequent specific words
             top_words = sorted(filtered.items(), key=lambda x: x[1], reverse=True)[:2]
             keywords = ' '.join(w[0].title() for w in top_words)
             
-            # If we got good keywords, return them
-            if len(keywords) > 4:  # At least something meaningful
+            if len(keywords) > 4:
+                print(f"   ✓ Extracted keywords (filtered by stopwords): {keywords}")
                 return keywords
         
-        # Second pass: Be more lenient with word length (> 2) but still filter common words
-        filtered_lenient = {w: c for w, c in word_freq.items() if w not in common_words and len(w) > 2}
+        # Second pass: Be more lenient with word length
+        filtered_lenient = {w: c for w, c in word_freq.items() 
+                           if w not in stopwords and len(w) > 2}
         
         if filtered_lenient:
             top_words = sorted(filtered_lenient.items(), key=lambda x: x[1], reverse=True)[:2]
             keywords = ' '.join(w[0].title() for w in top_words)
             if len(keywords) > 3:
+                print(f"   ✓ Extracted keywords (lenient): {keywords}")
                 return keywords
         
-        # Third pass: Extract any meaningful content words (nouns, verbs, adjectives)
-        # Look for longer words or capitalized words that might be names/concepts
+        # Third pass: Extract any words not in stopwords
         potential_topics = []
         for w in words:
-            if w not in common_words and len(w) > 3:
+            if w not in stopwords and len(w) > 3:
                 potential_topics.append(w.title())
         
         if potential_topics:
-            # Remove duplicates while preserving order
             seen = set()
             unique_topics = []
             for topic in potential_topics:
@@ -315,41 +336,21 @@ English topic name:"""
                     unique_topics.append(topic)
                     seen.add(topic.lower())
             if unique_topics:
-                return ' '.join(unique_topics)
+                result = ' '.join(unique_topics)
+                print(f"   ✓ Extracted unique topics: {result}")
+                return result
         
-        # Fourth pass: Just get ANY words that aren't super common
-        any_words = [w.title() for w in words if w not in common_words][:2]
+        # Fourth pass: Just get ANY words that aren't stopwords
+        any_words = [w.title() for w in words if w not in stopwords][:2]
         if any_words:
-            return ' '.join(any_words)
+            result = ' '.join(any_words)
+            print(f"   ✓ Extracted any non-stopwords: {result}")
+            return result
         
-        # Fifth pass: Look for ANY content in the sentences that might help
-        # Extract capitalized words, longer words, or words with numbers
-        all_potential = []
-        for s in sentences[:5]:
-            for word in s.split():
-                word_clean = word.strip('.,!?;:()[]{}"\'-')
-                # Look for: capitalized words, longer words (>4 chars), words with numbers
-                if (word_clean and len(word_clean) > 4) or (word_clean and word_clean[0].isupper()) or any(c.isdigit() for c in word_clean):
-                    latin_chars = sum(1 for c in word_clean if ord(c) < 128)
-                    if latin_chars > len(word_clean) * 0.7:  # More lenient Latin threshold
-                        all_potential.append(word_clean.title())
-        
-        if all_potential:
-            # Remove duplicates and common words
-            unique_potential = []
-            for word in all_potential:
-                if word.lower() not in common_words and word not in unique_potential:
-                    unique_potential.append(word)
-                    if len(unique_potential) >= 2:
-                        break
-            
-            if unique_potential:
-                return ' '.join(unique_potential[:2])
-        
-        # Absolute last resort - use topic ID based name if provided
+        # Last resort: use topic_id
         if topic_id:
             return f"Topic {topic_id}"
-        return "Unidentified Topic"
+        return "Unlabeled Topic"
     
     def generate_topic_summary(self, topic_data: Dict, topic_name: str) -> str:
         """

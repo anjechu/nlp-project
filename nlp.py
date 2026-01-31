@@ -443,6 +443,114 @@ class NLPProcessor:
             log_print(f"❌ 错误:\n{error_msg}")
             raise RuntimeError(f"后端错误: {str(e)}")
 
+# ==========================================
+# 6. Google Embedding Projector Export
+# ==========================================
+def export_to_projector(embeddings, dataframe, output_dir=".", vectors_filename="vectors.tsv", metadata_filename="metadata.tsv"):
+    """
+    Export embeddings and metadata to TSV files compatible with Google Embedding Projector.
+    
+    Args:
+        embeddings: numpy array of shape (n_samples, n_dimensions) - the embedding vectors
+        dataframe: pandas DataFrame containing at least 'text' and 'topic_id' columns
+        output_dir: directory where TSV files will be saved (default: current directory)
+        vectors_filename: name for the vectors TSV file (default: "vectors.tsv")
+        metadata_filename: name for the metadata TSV file (default: "metadata.tsv")
+    
+    Usage:
+        processor = NLPProcessor()
+        result = processor.process_file("input.json", "output.json")
+        # After processing, you can export embeddings from the dataframe
+        export_to_projector(embeddings, df, output_dir="analysis")
+    
+    Google Embedding Projector: https://projector.tensorflow.org/
+    """
+    import os
+    import numpy as np
+    import pandas as pd
+    
+    # Language detection lambda function
+    detect_language = lambda text: (
+        'Chinese' if any('\u4e00' <= c <= '\u9fff' for c in str(text)) else
+        'Japanese' if any('\u3040' <= c <= '\u30ff' or '\u31f0' <= c <= '\u31ff' for c in str(text)) else
+        'English'
+    )
+    
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    
+    vectors_path = os.path.join(output_dir, vectors_filename)
+    metadata_path = os.path.join(output_dir, metadata_filename)
+    
+    # Validate inputs
+    if embeddings is None or len(embeddings) == 0:
+        raise ValueError("Embeddings array is empty or None")
+    
+    if dataframe is None or len(dataframe) == 0:
+        raise ValueError("DataFrame is empty or None")
+    
+    if len(embeddings) != len(dataframe):
+        raise ValueError(f"Embeddings length ({len(embeddings)}) must match DataFrame length ({len(dataframe)})")
+    
+    # Check required columns
+    required_cols = ['text', 'topic_id']
+    missing_cols = [col for col in required_cols if col not in dataframe.columns]
+    if missing_cols:
+        raise ValueError(f"DataFrame missing required columns: {missing_cols}")
+    
+    log_print(f"📊 Exporting to Google Embedding Projector format...")
+    log_print(f"   - Embeddings shape: {embeddings.shape}")
+    log_print(f"   - DataFrame rows: {len(dataframe)}")
+    
+    # 1. Save vectors.tsv (no header, tab-separated)
+    try:
+        np.savetxt(vectors_path, embeddings, delimiter='\t', fmt='%.8f')
+        log_print(f"✅ Saved vectors to: {vectors_path}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to save vectors: {e}")
+    
+    # 2. Create and save metadata.tsv
+    try:
+        # Create metadata dataframe with required columns
+        metadata_df = pd.DataFrame()
+        
+        # Add text column (clean it for TSV format - remove tabs and newlines)
+        metadata_df['text'] = dataframe['text'].astype(str).apply(
+            lambda x: x.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ').strip()
+        )
+        
+        # Add topic_id column
+        metadata_df['topic_id'] = dataframe['topic_id'].astype(str)
+        
+        # Add language column using detection lambda
+        metadata_df['language'] = dataframe['text'].apply(detect_language)
+        
+        # Save with tab separator and include header
+        metadata_df.to_csv(metadata_path, sep='\t', index=False, encoding='utf-8')
+        
+        log_print(f"✅ Saved metadata to: {metadata_path}")
+        
+        # Log language distribution
+        lang_counts = metadata_df['language'].value_counts()
+        log_print(f"   Language distribution:")
+        for lang, count in lang_counts.items():
+            log_print(f"     - {lang}: {count} ({count/len(metadata_df)*100:.1f}%)")
+        
+    except Exception as e:
+        raise RuntimeError(f"Failed to save metadata: {e}")
+    
+    log_print(f"🎉 Export complete! Load these files at https://projector.tensorflow.org/")
+    log_print(f"   1. Upload {vectors_filename}")
+    log_print(f"   2. Upload {metadata_filename}")
+    
+    return {
+        'vectors_path': vectors_path,
+        'metadata_path': metadata_path,
+        'num_samples': len(embeddings),
+        'dimensions': embeddings.shape[1] if len(embeddings.shape) > 1 else 1,
+        'languages': lang_counts.to_dict()
+    }
+
 # 调试入口
 if __name__ == "__main__":
     input_file = "input.json" 

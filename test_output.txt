@@ -1,0 +1,45 @@
+test_cultural_summary_structure (test_llm_integration.TestLLMIntegration.test_cultural_summary_structure)
+Test cross-cultural insights structure ... ok
+test_topic_name_generation (test_llm_integration.TestLLMIntegration.test_topic_name_generation)
+Test LLM-based topic naming ... ok
+test_map_phase_structure (test_llm_integration.TestMapReduceArchitecture.test_map_phase_structure)
+Test MAP phase data structure ... ok
+test_reduce_phase_aggregation (test_llm_integration.TestMapReduceArchitecture.test_reduce_phase_aggregation)
+Test REDUCE phase aggregation ... ok
+test_duplicate_detection (test_nlp_core.TestDataValidation.test_duplicate_detection)
+Test duplicate comment detection ... ok
+test_invalid_content_filtering (test_nlp_core.TestDataValidation.test_invalid_content_filtering)
+Test filtering of invalid content ... ok
+test_min_length_validation (test_nlp_core.TestDataValidation.test_min_length_validation)
+Test minimum length requirements ... ok
+test_chinese_text_processing (test_nlp_core.TestNLPCore.test_chinese_text_processing)
+Test Chinese text processing ... ok
+test_fingerprint_generation (test_nlp_core.TestNLPCore.test_fingerprint_generation)
+Test duplicate detection via fingerprinting ... ok
+test_japanese_text_processing (test_nlp_core.TestNLPCore.test_japanese_text_processing)
+Test Japanese text processing ... ok
+test_sentiment_analysis (test_nlp_core.TestNLPCore.test_sentiment_analysis)
+Test sentiment analysis functionality ... ok
+test_text_cleaning (test_nlp_core.TestNLPCore.test_text_cleaning)
+Test text cleaning and normalization ... ok
+test_topic_modeling_input (test_nlp_core.TestNLPCore.test_topic_modeling_input)
+Test topic modeling with sample data ... ok
+test_sentiment_distribution (test_report_generator.TestChartData.test_sentiment_distribution)
+Test sentiment distribution calculation ... ok
+test_topic_density_ranking (test_report_generator.TestChartData.test_topic_density_ranking)
+Test topic density sorting (top 15) ... ok
+test_cultural_analysis_grouping (test_report_generator.TestReportGenerator.test_cultural_analysis_grouping)
+Test grouping topics by culture ... ok
+test_executive_summary_structure (test_report_generator.TestReportGenerator.test_executive_summary_structure)
+Test executive summary data structure ... ok
+test_filename_parsing (test_report_generator.TestReportGenerator.test_filename_parsing)
+Test game and language extraction from filenames ... ok
+test_html_generation (test_report_generator.TestReportGenerator.test_html_generation)
+Test HTML report structure generation ... ok
+test_sentiment_grouping (test_report_generator.TestReportGenerator.test_sentiment_grouping)
+Test grouping topics by sentiment ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.001s
+
+OK

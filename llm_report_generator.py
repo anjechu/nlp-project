@@ -31,6 +31,10 @@ class LLMReportGenerator:
         'koreana': 'Korean'
     }
     
+    # East Asian languages that require cultural correction in S-DAI model
+    # These languages tend to express negative emotions more implicitly
+    EAST_ASIAN_LANGUAGES = ['chinese', 'japanese', 'schinese', 'tchinese']
+    
     # Topic naming configuration
     MAX_TOPIC_NAME_LENGTH = 50  # Maximum length for generated topic names
     
@@ -825,7 +829,7 @@ Comprehensive Cultural Analysis:"""
         其中：
         - S_raw: 原始情感得分 (来自NLP sentiment分析，范围 -1 到 +1)
         - α: 文化修正系数
-          * 当 language 为东亚语言（chinese/japanese）且 S_raw < 0 时，α = 0.2
+          * 当 language 为东亚语言（见 EAST_ASIAN_LANGUAGES 常量）且 S_raw < 0 时，α = 0.2
           * 其他情况 α = 0
         
         理论依据：
@@ -868,8 +872,8 @@ Comprehensive Cultural Analysis:"""
         s_raw = topic.get('sentiment_score', 0)  # 获取原始情感得分
         
         # 判断是否为东亚语言且为负面情绪
-        # 东亚文化语境：中文(schinese/tchinese/chinese) 和 日文(japanese)
-        is_east_asian = language.lower() in ['chinese', 'japanese', 'schinese', 'tchinese']
+        # 使用类常量 EAST_ASIAN_LANGUAGES 确保一致性
+        is_east_asian = language.lower() in self.EAST_ASIAN_LANGUAGES
         is_negative = s_raw < 0
         
         # 如果是东亚语言的负面评论，应用文化修正系数

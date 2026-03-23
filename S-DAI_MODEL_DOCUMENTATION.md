@@ -1,5 +1,19 @@
 # S-DAI 模型文档 (Sentiment-adjusted Developer Actionable Index)
 
+> **⚠️ 架构更新通知 (2026-03-23)**
+> 
+> S-DAI 模型已从 `llm_report_generator.py` 迁移至 `nlp.py`，实现了以下重要改进：
+> - ✅ **行级精度**：在每条评论级别应用文化修正
+> - ✅ **向量空间原生访问**：直接计算真实的聚类紧密度
+> - ✅ **GPU 加速**：全流程 GPU 并行计算
+> - ✅ **架构优化**：更好的关注点分离
+> 
+> **详细信息请参考**：[S-DAI_ARCHITECTURE_REFACTORING.md](./S-DAI_ARCHITECTURE_REFACTORING.md)
+> 
+> 本文档保留作为算法理论参考。实现细节已更新至 `nlp.py`。
+
+---
+
 ## 1. 模型概述
 
 S-DAI（Sentiment-adjusted Developer Actionable Index，情感调整的开发者可执行指数）是一个用于游戏评论优先级评估的数学模型。该模型在 Map-Reduce 架构的 Reduce 阶段对来自不同文化背景的玩家反馈进行科学排序，帮助开发者快速识别最需要关注的游戏问题。

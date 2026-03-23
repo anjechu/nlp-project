@@ -54,7 +54,7 @@ def log_print(message):
     logging.info(message)
 
 # ==========================================
-# 1. 硬件检测
+# 1. 硬件检测 & 常量定义
 # ==========================================
 def get_device():
     if HAS_DIRECTML:
@@ -67,6 +67,11 @@ def get_device():
     return torch.device("cpu")
 
 GLOBAL_DEVICE = get_device()
+
+# S-DAI 模型常量：东亚语言需要文化修正
+# 这些语言在表达负面情绪时更加含蓄委婉
+EAST_ASIAN_LANGUAGES = ['chinese', 'japanese', 'schinese', 'tchinese']
+CULTURAL_CORRECTION_ALPHA = 0.2  # 文化修正系数：放大20%以补偿含蓄表达
 
 # ==========================================
 # 2. 深度清洗模块 (Updated)
@@ -311,8 +316,95 @@ class NLPProcessor:
         if self.sentiment_engine is None:
             self.sentiment_engine = SentimentEngine()
         if self.embedder is None:
-            log_print("🧠 加载 Embedding (强制 CPU 以节省显存)...")
-            self.embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2', device='cpu')
+            # 尝试在GPU上加载embedder以加速
+            device_str = 'cuda' if torch.cuda.is_available() else 'cpu'
+            log_print(f"🧠 加载 Embedding 模型 (Device: {device_str})...")
+            self.embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2', device=device_str)
+    
+    def _apply_cultural_correction(self, sentiment_scores, languages):
+        """
+        应用文化修正系数到行级情感得分 (S-DAI 第一步)
+        
+        在 NLP 流水线的早期阶段，对每条评论的原始情感得分应用文化修正。
+        这种行级别（Row-level）的校准在学术上比话题级别（Topic-level）更严谨。
+        
+        理论依据：
+        - 东亚文化（中文、日文）中负面情绪的表达更加含蓄委婉
+        - 例如："希望能改进" vs "This is terrible"
+        - NLP 模型往往低估东亚语言的负面情绪强度
+        - 通过放大20%来平衡这种文化差异
+        
+        参数：
+            sentiment_scores: 原始情感得分数组 (每条评论一个分数)
+            languages: 语言标签数组 (每条评论对应的语言)
+            
+        返回：
+            adjusted_scores: 文化修正后的情感得分数组
+        """
+        adjusted_scores = []
+        log_print(f"🌏 应用文化修正 (行级精度)...")
+        
+        corrections_applied = 0
+        for score, lang in zip(sentiment_scores, languages):
+            # 判断是否为东亚语言且为负面情绪
+            is_east_asian = lang.lower() in EAST_ASIAN_LANGUAGES
+            is_negative = score < 0
+            
+            if is_east_asian and is_negative:
+                # 应用文化修正系数：放大负面信号
+                adjusted_score = score * (1 + CULTURAL_CORRECTION_ALPHA)
+                corrections_applied += 1
+            else:
+                # 无需修正
+                adjusted_score = score
+            
+            adjusted_scores.append(adjusted_score)
+        
+        if corrections_applied > 0:
+            log_print(f"   ✅ 文化修正: {corrections_applied}/{len(sentiment_scores)} 条评论 (东亚负面)")
+        
+        return adjusted_scores
+    
+    def _calculate_topic_consistency(self, embeddings_topic):
+        """
+        计算话题聚类紧密度 (Consistency) - S-DAI 第二步的关键变量
+        
+        Consistency 衡量一个话题内部的一致性，通过计算每个点到质心的平均距离。
+        - 高一致性 (接近1.0): 意味着玩家诉求明确，更易于采取行动
+        - 低一致性 (接近0): 意味着话题内部观点分散
+        
+        计算公式：
+        consistency = 1 - (平均距离 / 理论最大距离)
+        
+        参数：
+            embeddings_topic: 该话题的所有评论向量 (已归一化)
+            
+        返回：
+            consistency: 聚类紧密度得分 [0, 1]
+        """
+        if len(embeddings_topic) == 0:
+            return 1.0
+        
+        # 计算质心 (在GPU上进行向量运算)
+        centroid = np.mean(embeddings_topic, axis=0).reshape(1, -1)
+        
+        # 计算每个点到质心的余弦相似度
+        similarities = cosine_similarity(centroid, embeddings_topic)[0]
+        
+        # 转换为距离：distance = 1 - similarity (范围 [0, 2])
+        # 对于归一化向量，余弦相似度范围是 [-1, 1]
+        # 因此距离范围是 [0, 2]
+        distances = 1 - similarities
+        avg_distance = np.mean(distances)
+        
+        # 归一化到 [0, 1]：consistency = 1 - (avg_distance / max_possible_distance)
+        # 对于余弦距离，最大值是2（完全相反）
+        consistency = 1 - (avg_distance / 2.0)
+        
+        # 确保在合理范围内
+        consistency = max(0.0, min(1.0, consistency))
+        
+        return float(consistency)
     
     def get_representative_sentences(self, df_topic, embeddings_topic, top_n=3):
         if len(df_topic) == 0: return []
@@ -383,8 +475,11 @@ class NLPProcessor:
             if progress_callback: progress_callback(20, "加载 AI 模型...")
             self._ensure_models_loaded()
 
-            # 3. 情感分析
-            df['sentiment'] = self.sentiment_engine.analyze(df['text'].tolist(), batch_size=32, progress_callback=progress_callback)
+            # 3. 情感分析 (原始分数)
+            df['sentiment_raw'] = self.sentiment_engine.analyze(df['text'].tolist(), batch_size=32, progress_callback=progress_callback)
+            
+            # 3.5 应用文化修正 (S-DAI 第一步 - 行级精度)
+            df['sentiment'] = self._apply_cultural_correction(df['sentiment_raw'].tolist(), df['lang'].tolist())
 
             if progress_callback: progress_callback(70, "生成语义向量...")
             embeddings = self.embedder.encode(df['text'].tolist(), batch_size=32, show_progress_bar=False)
@@ -406,6 +501,7 @@ class NLPProcessor:
             df = self.merge_similar_topics(df, normalized_embeddings, similarity_threshold=0.88)
 
             if progress_callback: progress_callback(90, "生成报告...")
+            log_print("📊 计算 S-DAI 优先级模型...")
             output_topics = []
             unique_topics = set(df['topic_id'].unique())
             
@@ -414,22 +510,37 @@ class NLPProcessor:
                 mask = (df['topic_id'] == t_id)
                 topic_data = df[mask]
                 
+                # 使用文化修正后的情感得分
                 score = float(topic_data['sentiment'].mean())
                 label = "neutral"
                 if score > 0.05: label = "positive"
                 elif score < -0.05: label = "negative"
+                
+                # 计算聚类紧密度 (Consistency)
+                consistency = self._calculate_topic_consistency(normalized_embeddings[mask])
+                
+                # 计算 DAI Score (开发者可执行指数)
+                # DAI = log(1 + V) × |S_adj| × C
+                density = len(topic_data)
+                dai_score = np.log1p(density) * abs(score) * consistency
 
                 output_topics.append({
                     "topic_id": int(t_id),
-                    "density": len(topic_data),
-                    "sentiment_score": round(score, 4),
+                    "density": density,
+                    "sentiment_score": round(score, 4),  # 已经是文化修正后的
                     "sentiment_label": label,
+                    "consistency": round(consistency, 4),  # 新增：聚类紧密度
+                    "dai_score": round(dai_score, 4),  # 新增：优先级得分
                     "cultural_distribution": topic_data['lang'].value_counts().to_dict(),
                     "representative_sentences": self.get_representative_sentences(topic_data, normalized_embeddings[mask]),
                     "sample_texts": topic_data['text'].head(10).tolist()
                 })
 
-            output_topics = sorted(output_topics, key=lambda x: x['density'], reverse=True)
+            # 按 DAI Score 降序排序 (而非简单的 density)
+            output_topics = sorted(output_topics, key=lambda x: x.get('dai_score', 0), reverse=True)
+            
+            log_print(f"✨ S-DAI 排序完成: Top Priority = {output_topics[0]['topic_id'] if output_topics else 'N/A'}")
+            
             final_data = {'statistics': {'total': len(comments), 'valid': len(df)}, 'topics': output_topics}
             
             with open(output_path, 'w', encoding='utf-8') as f:

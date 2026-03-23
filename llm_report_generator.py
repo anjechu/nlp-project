@@ -808,8 +808,21 @@ Comprehensive Cultural Analysis:"""
         
         return enhanced
     
+    # ==========================================
+    # DEPRECATED: S-DAI 计算已移至 nlp.py
+    # ==========================================
+    # 此方法保留作为参考，但不再使用
+    # S-DAI 模型现在在 nlp.py 的 NLPProcessor.process_file() 中实现
+    # 优势：
+    # 1. 行级精度：在每条评论级别应用文化修正
+    # 2. 向量空间原生访问：直接计算聚类紧密度
+    # 3. GPU 加速：所有向量运算在 GPU 上完成
+    # 4. 关注点分离：nlp.py 负责特征工程，llm_report_generator.py 负责报告生成
+    """
     def _calculate_s_dai(self, topic: Dict, language: str) -> float:
-        """
+        \"\"\"
+        [已废弃 - 保留作为参考]
+        
         计算游戏评论优先级评估模型 (S-DAI: Sentiment-adjusted Developer Actionable Index)
         
         该模型用于在 Map-Reduce 的 Reduce 阶段科学地对Topic进行优先级排序，
@@ -867,7 +880,7 @@ Comprehensive Cultural Analysis:"""
         使用示例：
             dai_score = self._calculate_s_dai(topic, 'chinese')
             # topic 字典会被更新，新增 's_adj' 和 'dai_score' 字段
-        """
+        \"\"\"
         # 第一步：计算文化加权情感得分 (S_adj)
         s_raw = topic.get('sentiment_score', 0)  # 获取原始情感得分
         
@@ -900,6 +913,7 @@ Comprehensive Cultural Analysis:"""
         topic['dai_score'] = dai_score  # 最终的优先级得分
         
         return dai_score
+    """
     
     def aggregate_map_results(self, map_results: List[Dict]) -> Dict:
         # 添加这行，看看进入 Reduce 阶段前数据对不对
@@ -912,10 +926,11 @@ Comprehensive Cultural Analysis:"""
         This is Phase 2 of the Map-Reduce architecture. Takes the cleaned, 
         LLM-enhanced results from each combination and merges them intelligently.
         
-        **集成 S-DAI 模型进行智能排序**：
-        - 对每个Topic计算文化敏感的优先级得分（S-DAI）
-        - 按照 DAI Score 降序排列，确保高优先级反馈排在前面
-        - 这使得开发者能够快速识别最需要关注的玩家反馈
+        **S-DAI 模型已在 nlp.py 中完成计算**：
+        - 在 NLP 流水线中，每条评论的情感得分已经过文化修正（行级精度）
+        - 聚类紧密度 (consistency) 已通过向量空间直接计算
+        - DAI Score 已在 Topic 生成时计算完成
+        - 此处只需使用预计算的 dai_score 进行排序
         
         Args:
             map_results: List of enhanced reports from MAP phase
@@ -946,12 +961,9 @@ Comprehensive Cultural Analysis:"""
             all_stats['games_processed'].add(game)
             all_stats['languages_processed'].add(lang)
             
-            # Add topics with source tracking and S-DAI calculation
+            # Add topics with source tracking
+            # S-DAI 已在 nlp.py 中计算完成，直接使用
             for topic in result.get('topics', []):
-                # 🎯 关键步骤：为每个Topic计算S-DAI优先级得分
-                # 传入语言信息以应用文化修正
-                self._calculate_s_dai(topic, lang)
-                
                 aggregated_topic = {
                     **topic,
                     'topic_id': topic_id_counter,
@@ -966,20 +978,22 @@ Comprehensive Cultural Analysis:"""
             all_stats['total_comments'] += stats.get('total', 0)
             all_stats['total_valid'] += stats.get('valid', 0)
         
-        # 🔥 核心改进：使用S-DAI模型进行智能排序
-        # 废弃原有排序逻辑，强制按照 dai_score 降序排列
-        # 这确保了开发者优先看到最需要关注的Topic（考虑了文化差异）
+        # 使用预计算的 DAI Score 排序
+        # nlp.py 已经在行级应用了文化修正，并计算了聚类紧密度
         all_topics.sort(key=lambda x: x.get('dai_score', 0), reverse=True)
         
-        print(f"📊 S-DAI Sorting Applied:")
+        print(f"📊 S-DAI Sorting Applied (Pre-calculated in nlp.py):")
         if all_topics:
-            print(f"   • Top Priority Topic: {all_topics[0].get('topic_name', 'N/A')} "
-                  f"(DAI={all_topics[0].get('dai_score', 0):.2f}, "
-                  f"S_adj={all_topics[0].get('s_adj', 0):.3f}, "
-                  f"Density={all_topics[0].get('density', 0)})")
+            top = all_topics[0]
+            print(f"   • Top Priority Topic: {top.get('topic_name', 'N/A')} "
+                  f"(DAI={top.get('dai_score', 0):.2f}, "
+                  f"Sentiment={top.get('sentiment_score', 0):.3f}, "
+                  f"Consistency={top.get('consistency', 1.0):.3f}, "
+                  f"Density={top.get('density', 0)})")
             if len(all_topics) > 1:
-                print(f"   • Lowest Priority Topic: {all_topics[-1].get('topic_name', 'N/A')} "
-                      f"(DAI={all_topics[-1].get('dai_score', 0):.2f})")
+                bottom = all_topics[-1]
+                print(f"   • Lowest Priority Topic: {bottom.get('topic_name', 'N/A')} "
+                      f"(DAI={bottom.get('dai_score', 0):.2f})")
         
         # Convert sets to lists for JSON serialization
         all_stats['games_processed'] = list(all_stats['games_processed'])

@@ -31,6 +31,10 @@ class LLMReportGenerator:
         'koreana': 'Korean'
     }
     
+    # East Asian languages that require cultural correction in S-DAI model
+    # These languages tend to express negative emotions more implicitly
+    EAST_ASIAN_LANGUAGES = ['chinese', 'japanese', 'schinese', 'tchinese']
+    
     # Topic naming configuration
     MAX_TOPIC_NAME_LENGTH = 50  # Maximum length for generated topic names
     
@@ -804,6 +808,113 @@ Comprehensive Cultural Analysis:"""
         
         return enhanced
     
+    # ==========================================
+    # DEPRECATED: S-DAI 计算已移至 nlp.py
+    # ==========================================
+    # 此方法保留作为参考，但不再使用
+    # S-DAI 模型现在在 nlp.py 的 NLPProcessor.process_file() 中实现
+    # 优势：
+    # 1. 行级精度：在每条评论级别应用文化修正
+    # 2. 向量空间原生访问：直接计算聚类紧密度
+    # 3. GPU 加速：所有向量运算在 GPU 上完成
+    # 4. 关注点分离：nlp.py 负责特征工程，llm_report_generator.py 负责报告生成
+    """
+    def _calculate_s_dai(self, topic: Dict, language: str) -> float:
+        \"\"\"
+        [已废弃 - 保留作为参考]
+        
+        计算游戏评论优先级评估模型 (S-DAI: Sentiment-adjusted Developer Actionable Index)
+        
+        该模型用于在 Map-Reduce 的 Reduce 阶段科学地对Topic进行优先级排序，
+        特别考虑了不同文化背景下的情感表达差异。
+        
+        核心理论基础：
+        1. 文化语言学：东亚文化（中文、日文）中负面情绪的表达更为含蓄委婉
+        2. 开发者资源有限性：需要量化"可执行指数"来优先处理高价值反馈
+        3. 多维度综合评估：结合声量、情感、一致性三个维度
+        
+        数学模型分两步：
+        
+        【第一步：文化加权情感得分 S_adj】
+        目的：修正跨文化情感偏差，使不同文化背景的负面反馈具有可比性
+        
+        公式：S_adj = S_raw × (1 + α)
+        其中：
+        - S_raw: 原始情感得分 (来自NLP sentiment分析，范围 -1 到 +1)
+        - α: 文化修正系数
+          * 当 language 为东亚语言（见 EAST_ASIAN_LANGUAGES 常量）且 S_raw < 0 时，α = 0.2
+          * 其他情况 α = 0
+        
+        理论依据：
+        - 东亚玩家在表达不满时倾向使用更委婉的语言（如"希望改进"而非"太烂了"）
+        - 这导致NLP模型低估其负面情绪强度
+        - 通过放大20%来平衡这种文化差异
+        - 参数0.2基于文献研究和pilot实验（可根据实际数据调整）
+        
+        【第二步：开发者可执行指数 DAI】
+        目的：量化该Topic对开发者的"优先级价值"
+        
+        公式：DAI = log(1 + V) × |S_adj| × C
+        其中：
+        - V (Volume): 声量，即提及该Topic的玩家数量 (density字段)
+          * 使用log1p变换体现边际效益递减（1000人→2000人的增量价值 < 10人→20人）
+        - |S_adj|: 情感强度的绝对值
+          * 无论正面还是负面，强烈的情感都值得关注
+          * 绝对值确保正负情感都被考虑
+        - C (Consistency): 聚类紧密度，表示该Topic内部的一致性 (0-1)
+          * 高一致性意味着玩家诉求明确，更易于采取行动
+          * 默认为1.0（上游NLP可能未提供此字段）
+        
+        返回值：
+        - dai_score: 最终的优先级得分（越高越优先）
+        
+        同时将 s_adj 和 dai_score 注入到 topic 字典中，便于后续分析和可视化。
+        
+        参数：
+            topic (Dict): Topic字典，必须包含 sentiment_score 和 density 字段
+            language (str): 语言标识，如 'chinese', 'japanese', 'english'
+            
+        返回：
+            float: DAI得分
+            
+        使用示例：
+            dai_score = self._calculate_s_dai(topic, 'chinese')
+            # topic 字典会被更新，新增 's_adj' 和 'dai_score' 字段
+        \"\"\"
+        # 第一步：计算文化加权情感得分 (S_adj)
+        s_raw = topic.get('sentiment_score', 0)  # 获取原始情感得分
+        
+        # 判断是否为东亚语言且为负面情绪
+        # 使用类常量 EAST_ASIAN_LANGUAGES 确保一致性
+        is_east_asian = language.lower() in self.EAST_ASIAN_LANGUAGES
+        is_negative = s_raw < 0
+        
+        # 如果是东亚语言的负面评论，应用文化修正系数
+        if is_east_asian and is_negative:
+            alpha = 0.2  # 放大20%以补偿含蓄表达造成的低估
+        else:
+            alpha = 0  # 其他情况不做修正
+        
+        # 计算修正后的情感得分
+        s_adj = s_raw * (1 + alpha)
+        
+        # 第二步：计算开发者可执行指数 (DAI)
+        v = topic.get('density', 1)  # 声量：提及该话题的玩家数量
+        consistency = topic.get('consistency', 1.0)  # 一致性：默认1.0（上游可能未提供）
+        
+        # DAI公式：对数声量 × 情感强度 × 一致性
+        # - np.log1p(v): log(1+v)，避免log(0)且体现边际递减
+        # - abs(s_adj): 情感强度的绝对值，正负情感都重要
+        # - consistency: 聚类紧密度，越高表示诉求越明确
+        dai_score = np.log1p(v) * abs(s_adj) * consistency
+        
+        # 将计算结果注入到topic字典中，便于后续分析和排序
+        topic['s_adj'] = s_adj  # 文化修正后的情感得分
+        topic['dai_score'] = dai_score  # 最终的优先级得分
+        
+        return dai_score
+    """
+    
     def aggregate_map_results(self, map_results: List[Dict]) -> Dict:
         # 添加这行，看看进入 Reduce 阶段前数据对不对
         for r in map_results:
@@ -815,11 +926,17 @@ Comprehensive Cultural Analysis:"""
         This is Phase 2 of the Map-Reduce architecture. Takes the cleaned, 
         LLM-enhanced results from each combination and merges them intelligently.
         
+        **S-DAI 模型已在 nlp.py 中完成计算**：
+        - 在 NLP 流水线中，每条评论的情感得分已经过文化修正（行级精度）
+        - 聚类紧密度 (consistency) 已通过向量空间直接计算
+        - DAI Score 已在 Topic 生成时计算完成
+        - 此处只需使用预计算的 dai_score 进行排序
+        
         Args:
             map_results: List of enhanced reports from MAP phase
             
         Returns:
-            Single aggregated report with all valuable topics
+            Single aggregated report with all valuable topics (sorted by S-DAI score)
         """
         print(f"\n{'='*80}")
         print(f"🔄 REDUCE PHASE: Aggregating {len(map_results)} independently processed results")
@@ -845,6 +962,7 @@ Comprehensive Cultural Analysis:"""
             all_stats['languages_processed'].add(lang)
             
             # Add topics with source tracking
+            # S-DAI 已在 nlp.py 中计算完成，直接使用
             for topic in result.get('topics', []):
                 aggregated_topic = {
                     **topic,
@@ -859,6 +977,23 @@ Comprehensive Cultural Analysis:"""
             stats = result.get('statistics', {})
             all_stats['total_comments'] += stats.get('total', 0)
             all_stats['total_valid'] += stats.get('valid', 0)
+        
+        # 使用预计算的 DAI Score 排序
+        # nlp.py 已经在行级应用了文化修正，并计算了聚类紧密度
+        all_topics.sort(key=lambda x: x.get('dai_score', 0), reverse=True)
+        
+        print(f"📊 S-DAI Sorting Applied (Pre-calculated in nlp.py):")
+        if all_topics:
+            top = all_topics[0]
+            print(f"   • Top Priority Topic: {top.get('topic_name', 'N/A')} "
+                  f"(DAI={top.get('dai_score', 0):.2f}, "
+                  f"Sentiment={top.get('sentiment_score', 0):.3f}, "
+                  f"Consistency={top.get('consistency', 1.0):.3f}, "
+                  f"Density={top.get('density', 0)})")
+            if len(all_topics) > 1:
+                bottom = all_topics[-1]
+                print(f"   • Lowest Priority Topic: {bottom.get('topic_name', 'N/A')} "
+                      f"(DAI={bottom.get('dai_score', 0):.2f})")
         
         # Convert sets to lists for JSON serialization
         all_stats['games_processed'] = list(all_stats['games_processed'])

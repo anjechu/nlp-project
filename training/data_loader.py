@@ -8,6 +8,7 @@ Data Loader for Contrastive Learning + Curriculum Learning
 - 对比学习的正负样本对构建
 - 多语言支持
 - Glob模式加载多个文件
+- 智能路径解析（自动搜索子目录）
 """
 
 import json
@@ -19,6 +20,90 @@ import random
 from collections import defaultdict
 import glob
 import os
+
+
+def find_data_files(pattern: str, search_subdirs: bool = True) -> List[str]:
+    """
+    智能搜索数据文件
+    
+    Args:
+        pattern: 文件匹配模式（如 "*.json" 或 "steam_reviews_*.json"）
+        search_subdirs: 是否搜索常见子目录
+    
+    Returns:
+        匹配的文件路径列表
+    """
+    # 首先在当前目录搜索
+    files = glob.glob(pattern)
+    
+    if files:
+        return files
+    
+    if not search_subdirs:
+        return []
+    
+    # 常见的数据子目录
+    common_subdirs = [
+        'steam_reviews',
+        'data',
+        'training_data',
+        'reviews',
+        'comments',
+        './steam_reviews',
+        './data',
+        '../steam_reviews',
+        '../data',
+    ]
+    
+    # 在子目录中搜索
+    for subdir in common_subdirs:
+        if os.path.exists(subdir):
+            # 将模式应用到子目录
+            subdir_pattern = os.path.join(subdir, pattern)
+            files = glob.glob(subdir_pattern)
+            if files:
+                print(f"💡 提示: 在子目录 '{subdir}' 中找到文件")
+                return files
+    
+    return []
+
+
+def get_helpful_path_message(pattern: str) -> str:
+    """
+    生成有用的错误提示信息
+    
+    Args:
+        pattern: 用户提供的文件模式
+    
+    Returns:
+        包含建议的错误信息
+    """
+    msg = f"\n❌ 错误: 未找到匹配 '{pattern}' 的文件！\n\n"
+    msg += "💡 建议:\n"
+    msg += f"   1. 检查当前目录: {os.path.abspath('.')}\n"
+    msg += f"   2. 确认文件确实存在\n"
+    msg += f"   3. 如果文件在子目录，请使用相对路径:\n"
+    msg += f"      例如: 'steam_reviews/*.json'\n"
+    msg += f"      例如: 'data/*.json'\n"
+    msg += f"   4. 使用绝对路径:\n"
+    msg += f"      例如: '/path/to/your/data/*.json'\n"
+    msg += f"\n已搜索的位置:\n"
+    msg += f"   - 当前目录: {os.path.abspath('.')}\n"
+    
+    # 列出常见子目录
+    common_subdirs = ['steam_reviews', 'data', 'training_data', 'reviews']
+    for subdir in common_subdirs:
+        subdir_path = os.path.join('.', subdir)
+        if os.path.exists(subdir_path):
+            # 检查该目录下是否有JSON文件
+            json_files = glob.glob(os.path.join(subdir_path, '*.json'))
+            if json_files:
+                msg += f"   - {subdir}/: ✓ 发现 {len(json_files)} 个 JSON 文件\n"
+                msg += f"     💡 尝试使用: --data_path '{subdir}/*.json'\n"
+            else:
+                msg += f"   - {subdir}/: (无 JSON 文件)\n"
+    
+    return msg
 
 
 class SteamReviewDataset(Dataset):
@@ -55,9 +140,12 @@ class SteamReviewDataset(Dataset):
         if '*' in data_path or '?' in data_path:
             # Glob模式：加载多个文件
             print(f"📂 正在扫描路径: {data_path}")
-            file_list = glob.glob(data_path)
+            file_list = find_data_files(data_path, search_subdirs=True)
+            
             if not file_list:
-                print(f"⚠️ 警告: 未找到匹配 '{data_path}' 的文件")
+                # 提供详细的错误信息和建议
+                error_msg = get_helpful_path_message(data_path)
+                print(error_msg)
                 self.reviews = []
             else:
                 print(f"🔍 成功匹配到 {len(file_list)} 个 JSON 文件，开始合并加载...")
@@ -87,8 +175,30 @@ class SteamReviewDataset(Dataset):
         else:
             # 单个文件：直接加载
             print(f"📂 加载数据: {data_path}")
+            
+            # 检查文件是否存在
             if not os.path.exists(data_path):
-                raise FileNotFoundError(f"数据文件不存在: {data_path}")
+                # 尝试在常见子目录中查找
+                found_path = None
+                common_subdirs = ['steam_reviews', 'data', 'training_data', 'reviews', '../steam_reviews', '../data']
+                
+                for subdir in common_subdirs:
+                    potential_path = os.path.join(subdir, os.path.basename(data_path))
+                    if os.path.exists(potential_path):
+                        found_path = potential_path
+                        print(f"💡 提示: 在子目录 '{subdir}' 中找到文件")
+                        data_path = found_path
+                        break
+                
+                if not found_path:
+                    error_msg = f"\n❌ 错误: 数据文件不存在: {data_path}\n"
+                    error_msg += f"\n💡 建议:\n"
+                    error_msg += f"   1. 检查文件路径是否正确\n"
+                    error_msg += f"   2. 当前工作目录: {os.path.abspath('.')}\n"
+                    error_msg += f"   3. 如果文件在子目录，请使用:\n"
+                    error_msg += f"      例如: 'steam_reviews/your_file.json'\n"
+                    error_msg += f"      或使用通配符: 'steam_reviews/*.json'\n"
+                    raise FileNotFoundError(error_msg)
             
             with open(data_path, 'r', encoding='utf-8') as f:
                 raw_data = json.load(f)

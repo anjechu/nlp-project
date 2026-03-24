@@ -250,9 +250,12 @@ class CurriculumScheduler:
         
         # 统计难度分布
         diff_values = [d['difficulty'] for d in self.difficulties]
-        print(f"   难度分布: min={min(diff_values):.3f}, "
-              f"mean={np.mean(diff_values):.3f}, "
-              f"max={max(diff_values):.3f}")
+        if len(diff_values) > 0:
+            print(f"   难度分布: min={min(diff_values):.3f}, "
+                  f"mean={np.mean(diff_values):.3f}, "
+                  f"max={max(diff_values):.3f}")
+        else:
+            print(f"   ⚠️ 警告: 没有样本数据")
     
     def _sort_by_difficulty(self):
         """按难度排序"""
@@ -263,12 +266,15 @@ class CurriculumScheduler:
         
         # 显示难度分段统计
         n_samples = len(self.sorted_indices)
-        easy_cutoff = int(n_samples * 0.33)
-        medium_cutoff = int(n_samples * 0.67)
-        
-        print(f"   简单样本 (0-0.33): {easy_cutoff} 个")
-        print(f"   中等样本 (0.33-0.67): {medium_cutoff - easy_cutoff} 个")
-        print(f"   困难样本 (0.67-1.0): {n_samples - medium_cutoff} 个")
+        if n_samples > 0:
+            easy_cutoff = int(n_samples * 0.33)
+            medium_cutoff = int(n_samples * 0.67)
+            
+            print(f"   简单样本 (0-0.33): {easy_cutoff} 个")
+            print(f"   中等样本 (0.33-0.67): {medium_cutoff - easy_cutoff} 个")
+            print(f"   困难样本 (0.67-1.0): {n_samples - medium_cutoff} 个")
+        else:
+            print(f"   ⚠️ 警告: 没有样本可排序")
     
     def get_curriculum_indices(self, epoch: int, total_epochs: int) -> List[int]:
         """

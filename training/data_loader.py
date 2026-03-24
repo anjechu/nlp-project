@@ -7,6 +7,7 @@ Data Loader for Contrastive Learning + Curriculum Learning
 - 自动标签生成（基于情感分数）
 - 对比学习的正负样本对构建
 - 多语言支持
+- Glob模式加载多个文件
 """
 
 import json
@@ -16,6 +17,8 @@ from torch.utils.data import Dataset, DataLoader
 from typing import List, Dict, Tuple, Optional
 import random
 from collections import defaultdict
+import glob
+import os
 
 
 class SteamReviewDataset(Dataset):
@@ -38,7 +41,7 @@ class SteamReviewDataset(Dataset):
     ):
         """
         Args:
-            data_path: JSON数据文件路径
+            data_path: JSON数据文件路径（支持glob模式，如 "*.json" 或 "data/*.json"）
             tokenizer: HuggingFace tokenizer
             max_length: 最大序列长度
             auto_label: 是否自动生成标签（基于XLM-RoBERTa预测）
@@ -48,23 +51,60 @@ class SteamReviewDataset(Dataset):
         self.max_length = max_length
         self.auto_label = auto_label
         
-        # 加载数据
-        print(f"📂 加载数据: {data_path}")
-        with open(data_path, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-        
-        # 解析数据格式
-        if isinstance(raw_data, list):
-            self.reviews = raw_data
-        elif isinstance(raw_data, dict):
-            # 尝试不同的字段名
-            self.reviews = (
-                raw_data.get('comments', []) or 
-                raw_data.get('reviews', []) or
-                raw_data.get('data', [])
-            )
+        # 检查是否是glob模式
+        if '*' in data_path or '?' in data_path:
+            # Glob模式：加载多个文件
+            print(f"📂 正在扫描路径: {data_path}")
+            file_list = glob.glob(data_path)
+            if not file_list:
+                print(f"⚠️ 警告: 未找到匹配 '{data_path}' 的文件")
+                self.reviews = []
+            else:
+                print(f"🔍 成功匹配到 {len(file_list)} 个 JSON 文件，开始合并加载...")
+                self.reviews = []
+                for file_path in file_list:
+                    try:
+                        print(f"   加载: {os.path.basename(file_path)}")
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            raw_data = json.load(f)
+                        
+                        # 解析数据格式并合并
+                        if isinstance(raw_data, list):
+                            self.reviews.extend(raw_data)
+                        elif isinstance(raw_data, dict):
+                            # 尝试不同的字段名
+                            file_reviews = (
+                                raw_data.get('comments', []) or 
+                                raw_data.get('reviews', []) or
+                                raw_data.get('data', [])
+                            )
+                            self.reviews.extend(file_reviews)
+                    except Exception as e:
+                        print(f"   ⚠️ 加载失败 {os.path.basename(file_path)}: {e}")
+                        continue
+                
+                print(f"✓ 合并完成: 共 {len(self.reviews)} 条原始评论")
         else:
-            raise ValueError(f"不支持的数据格式: {type(raw_data)}")
+            # 单个文件：直接加载
+            print(f"📂 加载数据: {data_path}")
+            if not os.path.exists(data_path):
+                raise FileNotFoundError(f"数据文件不存在: {data_path}")
+            
+            with open(data_path, 'r', encoding='utf-8') as f:
+                raw_data = json.load(f)
+            
+            # 解析数据格式
+            if isinstance(raw_data, list):
+                self.reviews = raw_data
+            elif isinstance(raw_data, dict):
+                # 尝试不同的字段名
+                self.reviews = (
+                    raw_data.get('comments', []) or 
+                    raw_data.get('reviews', []) or
+                    raw_data.get('data', [])
+                )
+            else:
+                raise ValueError(f"不支持的数据格式: {type(raw_data)}")
         
         # 清洗和预处理
         self.samples = []

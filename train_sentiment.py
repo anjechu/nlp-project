@@ -139,6 +139,17 @@ def main():
         min_text_length=args.min_text_length
     )
     
+    # 验证数据集不为空
+    if len(full_dataset) == 0:
+        print("\n❌ 错误: 数据集为空！")
+        print("   可能的原因:")
+        print("   1. 数据文件不存在或路径错误")
+        print("   2. 数据文件格式不正确")
+        print("   3. 所有样本都被过滤掉了（文本太短）")
+        print(f"\n   请检查数据路径: {args.data_path}")
+        print(f"   最小文本长度要求: {args.min_text_length} 字符")
+        return
+    
     # 划分训练集和验证集
     print(f"\n✂️ 划分数据集...")
     dataset_size = len(full_dataset)

@@ -218,6 +218,9 @@ class CurriculumScheduler:
         self.initial_easy_ratio = initial_easy_ratio
         self.warmup_epochs = warmup_epochs
         
+        # 保存原始索引映射（如果dataset有的话）
+        self.original_indices = getattr(dataset, 'original_indices', None)
+        
         # 计算所有样本的难度
         print("📚 计算样本难度...")
         self._compute_difficulties()
@@ -303,10 +306,18 @@ class CurriculumScheduler:
         n_selected = int(n_samples * ratio)
         selected_indices = self.sorted_indices[:n_selected]
         
-        print(f"📖 Epoch {epoch+1}: 使用 {len(selected_indices)}/{n_samples} 样本 "
-              f"(难度比例: {ratio:.2%})")
-        
-        return selected_indices
+        # 如果有原始索引映射，则映射回去
+        if self.original_indices is not None:
+            # selected_indices是相对于temp_dataset的索引
+            # 需要映射到原始dataset的索引
+            mapped_indices = [self.original_indices[idx] for idx in selected_indices]
+            print(f"📖 Epoch {epoch+1}: 使用 {len(mapped_indices)}/{n_samples} 样本 "
+                  f"(难度比例: {ratio:.2%})")
+            return mapped_indices
+        else:
+            print(f"📖 Epoch {epoch+1}: 使用 {len(selected_indices)}/{n_samples} 样本 "
+                  f"(难度比例: {ratio:.2%})")
+            return selected_indices
     
     def get_difficulty_stats(self) -> Dict:
         """获取难度统计信息"""

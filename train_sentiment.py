@@ -164,10 +164,11 @@ def main():
     
     # 创建临时数据集对象
     class TempDataset:
-        def __init__(self, samples):
+        def __init__(self, samples, original_indices):
             self.samples = samples
+            self.original_indices = original_indices  # 保存原始索引映射
     
-    temp_dataset = TempDataset(train_samples)
+    temp_dataset = TempDataset(train_samples, list(train_dataset.indices))
     
     curriculum_scheduler = CurriculumScheduler(
         dataset=temp_dataset,

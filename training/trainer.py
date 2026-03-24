@@ -239,8 +239,15 @@ class SentimentTrainer:
             epoch, self.num_epochs
         )
         
-        # 创建子数据集
-        curriculum_subset = Subset(self.train_dataset, curriculum_indices)
+        # curriculum_indices 现在已经是相对于原始full_dataset的索引
+        # 但是train_dataset是一个Subset，所以我们需要找到这些索引在Subset中的位置
+        # 或者直接从原始数据集创建Subset
+        
+        # 方法：直接用原始数据集和curriculum_indices创建新的Subset
+        # 因为curriculum_indices已经被映射回原始索引了
+        from torch.utils.data import Subset as TorchSubset
+        curriculum_subset = TorchSubset(self.train_dataset.dataset, curriculum_indices)
+        
         train_loader = DataLoader(
             curriculum_subset,
             batch_size=self.batch_size,
